@@ -6,9 +6,9 @@
 //==============================================================================
 #pragma once
 
-#include <sys/socket.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <sys/socket.h>
 #include <mutex>
 #include <vector>
 
@@ -36,6 +36,6 @@ public:
     Connect(int socket, const sockaddr_storage& addr);
     virtual ~Connect();
 
-    virtual void Enqueue(std::vector<char>&& buffer);
-    virtual void Dequeue(const std::vector<char>& buffer) const;
+    virtual void Send(std::vector<char>&& buffer);
+    virtual void Recv(const std::vector<char>& buffer) const;
 };

@@ -6,15 +6,15 @@
 //==============================================================================
 #include <netdb.h>
 #include <unistd.h>
-#include <sys/socket.h>
 #include <netinet/in.h>
 #include "Connect.h"
 #include "Listen.h"
 
 //------------------------------------------------------------------------------
-Listen::Listen(const char* address, const char* port)
+Listen::Listen(const char* address, const char* port, int backlog)
 {
     (*this).socket = 0;
+    (*this).backlog = backlog;
     (*this).address = address ? strdup(address) : nullptr;
     (*this).port = port ? strdup(port) : strdup("7777");
     (*this).addrinfo = nullptr;
@@ -73,7 +73,7 @@ void Listen::Procedure()
     if (::bind(socket, addrinfo->ai_addr, addrinfo->ai_addrlen) < 0)
         return;
 
-    if (::listen(socket, 511) < 0)
+    if (::listen(socket, backlog) < 0)
         return;
 
     while (terminate == false)
@@ -84,7 +84,7 @@ void Listen::Procedure()
         if (id < 0)
             return;
 
-        Connect* connect = new Connect(id, addr);
+        Connect* connect = CreateConnect(id, addr);
         if (connect == nullptr)
         {
             ::close(id);
@@ -101,6 +101,11 @@ void* Listen::ProcedureThread(void* arg)
     Listen& listen = *(Listen*)arg;
     listen.Procedure();
     return nullptr;
+}
+//------------------------------------------------------------------------------
+Connect* Listen::CreateConnect(int socket, const sockaddr_storage& addr)
+{
+    return new Connect(socket, addr);
 }
 //------------------------------------------------------------------------------
 void Listen::AttachConnect(Connect* connect)

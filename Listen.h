@@ -6,14 +6,16 @@
 //==============================================================================
 #pragma once
 
+#include <pthread.h>
+#include <sys/socket.h>
 #include <mutex>
 #include <vector>
-#include <pthread.h>
 
 class Connect;
 class Listen
 {
     int socket;
+    int backlog;
     char* address;
     char* port;
     struct addrinfo* addrinfo;
@@ -29,9 +31,10 @@ private:
     static void* ProcedureThread(void* arg);
 
 public:
-    Listen(const char* address, const char* port);
+    Listen(const char* address, const char* port, int backlog = 128);
     virtual ~Listen();
 
-    void AttachConnect(Connect* connect);
-    void DetachConnect(Connect* connect);
+    virtual Connect* CreateConnect(int socket, const sockaddr_storage& addr);
+    virtual void AttachConnect(Connect* connect);
+    virtual void DetachConnect(Connect* connect);
 };

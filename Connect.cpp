@@ -62,7 +62,7 @@ void Connect::ProcedureRecv()
         if (result < 0)
             break;
 
-        Dequeue(buffer);
+        Recv(buffer);
     }
 
     terminate = true;
@@ -118,7 +118,7 @@ void* Connect::ProcedureSendThread(void* arg)
     return nullptr;
 }
 //------------------------------------------------------------------------------
-void Connect::Enqueue(std::vector<char>&& buffer)
+void Connect::Send(std::vector<char>&& buffer)
 {
     sendBufferMutex.lock();
     sendBuffer.emplace_back(buffer);
@@ -132,7 +132,7 @@ void Connect::Enqueue(std::vector<char>&& buffer)
     }
 }
 //------------------------------------------------------------------------------
-void Connect::Dequeue(const std::vector<char>& buffer) const
+void Connect::Recv(const std::vector<char>& buffer) const
 {
     
 }
