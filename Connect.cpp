@@ -8,40 +8,47 @@
 #include "Connect.h"
 
 //------------------------------------------------------------------------------
-Connect::Connect(int socket, const sockaddr_storage& addr)
+Connect::Connect(int socket, const struct sockaddr_storage& addr)
 {
-    (*this).socket = socket;
-    (*this).addr = addr;
-    ::pthread_create(&threadRecv, nullptr, ProcedureRecvThread, this);
-    ::pthread_create(&threadSend, nullptr, ProcedureSendThread, this);
-    (*this).terminate = false;
-    (*this).sendBufferAvailable = 0;
-    (*this).sendBufferSemaphore = sem_open("", O_CREAT);
+    thiz.terminate = false;
+    thiz.socket = socket;
+    thiz.addr = addr;
+    thiz.threadRecv = nullptr;
+    thiz.threadSend = nullptr;
+    thiz.sendBufferAvailable = 0;
+    thiz.sendBufferSemaphore = ::sem_open("", O_CREAT);
+
+    pthread_attr_t attr;
+    ::pthread_attr_init(&attr);
+    ::pthread_attr_setstacksize(&attr, 65536);
+
+    ::pthread_create(&thiz.threadRecv, &attr, ProcedureRecvThread, this);
+    ::pthread_create(&thiz.threadSend, &attr, ProcedureSendThread, this);
 }
 //------------------------------------------------------------------------------
 Connect::~Connect()
 {
-    terminate = true;
+    thiz.terminate = true;
 
-    if (socket > 0)
+    if (thiz.socket > 0)
     {
-        ::close(socket);
+        ::close(thiz.socket);
     }
-    if (sendBufferSemaphore)
+    if (thiz.sendBufferSemaphore)
     {
-        sem_post(sendBufferSemaphore);
+        ::sem_post(thiz.sendBufferSemaphore);
     }
-    if (threadRecv)
+    if (thiz.threadRecv)
     {
-        ::pthread_join(threadRecv, nullptr);
+        ::pthread_join(thiz.threadRecv, nullptr);
     }
-    if (threadSend)
+    if (thiz.threadSend)
     {
-        ::pthread_join(threadSend, nullptr);
+        ::pthread_join(thiz.threadSend, nullptr);
     }
-    if (sendBufferSemaphore)
+    if (thiz.sendBufferSemaphore)
     {
-        sem_close(sendBufferSemaphore);
+        ::sem_close(thiz.sendBufferSemaphore);
     }
 }
 //------------------------------------------------------------------------------
@@ -49,59 +56,51 @@ void Connect::ProcedureRecv()
 {
     std::vector<char> buffer;
 
-    while (terminate == false)
+    while (thiz.terminate == false)
     {
-        ssize_t result;
-
         unsigned short size = 0;
-        result = ::recv(socket, &size, sizeof(short), MSG_WAITALL);
-        if (result < 0)
+        if (::recv(thiz.socket, &size, sizeof(short), MSG_WAITALL) < 0)
             break;
         buffer.resize(size);
-        result = ::recv(socket, &buffer.front(), size, MSG_WAITALL);
-        if (result < 0)
+        if (::recv(thiz.socket, &buffer.front(), size, MSG_WAITALL) < 0)
             break;
 
         Recv(buffer);
     }
 
-    terminate = true;
+    thiz.terminate = true;
 }
 //------------------------------------------------------------------------------
 void Connect::ProcedureSend()
 {
-    while (terminate == false)
+    while (thiz.terminate == false)
     {
-        sem_wait(sendBufferSemaphore);
+        sem_wait(thiz.sendBufferSemaphore);
 
         int available = 0;
         do
         {
             std::vector<char> buffer;
-            sendBufferMutex.lock();
-            if (sendBuffer.empty() == false)
+            thiz.sendBufferMutex.lock();
+            if (thiz.sendBuffer.empty() == false)
             {
-                sendBuffer.front().swap(buffer);
-                sendBuffer.erase(sendBuffer.begin());
+                thiz.sendBuffer.front().swap(buffer);
+                thiz.sendBuffer.erase(thiz.sendBuffer.begin());
             }
-            sendBufferMutex.unlock();
-            if (buffer.empty())
-                continue;
-            ssize_t result;
-
-            unsigned short size = (short)buffer.size();
-            result = ::send(socket, &size, sizeof(short), MSG_WAITALL);
-            if (result < 0)
-                break;
-            result = ::send(socket, &buffer.front(), size, MSG_WAITALL);
-            if (result < 0)
-                break;
-
-            available = __sync_sub_and_fetch(&sendBufferAvailable, 1);
+            thiz.sendBufferMutex.unlock();
+            if (buffer.empty() == false)
+            {
+                unsigned short size = (short)buffer.size();
+                if (::send(thiz.socket, &size, sizeof(short), MSG_WAITALL) < 0)
+                    break;
+                if (::send(thiz.socket, &buffer.front(), size, MSG_WAITALL) < 0)
+                    break;
+            }
+            available = __sync_sub_and_fetch(&thiz.sendBufferAvailable, 1);
         } while (available > 0);
     }
 
-    terminate = true;
+    thiz.terminate = true;
 }
 //------------------------------------------------------------------------------
 void* Connect::ProcedureRecvThread(void* arg)
@@ -120,15 +119,15 @@ void* Connect::ProcedureSendThread(void* arg)
 //------------------------------------------------------------------------------
 void Connect::Send(std::vector<char>&& buffer)
 {
-    sendBufferMutex.lock();
-    sendBuffer.emplace_back(buffer);
-    sendBufferMutex.unlock();
+    thiz.sendBufferMutex.lock();
+    thiz.sendBuffer.emplace_back(buffer);
+    thiz.sendBufferMutex.unlock();
 
-    int available = __sync_add_and_fetch(&sendBufferAvailable, 1);
-    if (available <= 1)
+    int available = __sync_add_and_fetch(&thiz.sendBufferAvailable, 1);
+    if (available <= 2)
     {
-        available = 1;
-        sem_post(sendBufferSemaphore);
+        available = 2;
+        sem_post(thiz.sendBufferSemaphore);
     }
 }
 //------------------------------------------------------------------------------

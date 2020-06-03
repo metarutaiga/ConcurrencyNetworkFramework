@@ -6,20 +6,16 @@
 //==============================================================================
 #pragma once
 
-#include <pthread.h>
-#include <semaphore.h>
-#include <sys/socket.h>
-#include <mutex>
-#include <vector>
+#include "FrameworkHeader.h"
 
 class Connect
 {
+    volatile bool terminate;
+
     int socket;
     struct sockaddr_storage addr;
     pthread_t threadRecv;
     pthread_t threadSend;
-
-    volatile bool terminate;
 
     std::vector<std::vector<char>> sendBuffer;
     std::mutex sendBufferMutex;
@@ -33,7 +29,7 @@ private:
     static void* ProcedureSendThread(void* arg);
 
 public:
-    Connect(int socket, const sockaddr_storage& addr);
+    Connect(int socket, const struct sockaddr_storage& addr);
     virtual ~Connect();
 
     virtual void Send(std::vector<char>&& buffer);

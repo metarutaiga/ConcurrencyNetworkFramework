@@ -13,45 +13,50 @@
 //------------------------------------------------------------------------------
 Listen::Listen(const char* address, const char* port, int backlog)
 {
-    (*this).socket = 0;
-    (*this).backlog = backlog;
-    (*this).address = address ? strdup(address) : nullptr;
-    (*this).port = port ? strdup(port) : strdup("7777");
-    (*this).addrinfo = nullptr;
-    (*this).thread = nullptr;
-    ::pthread_create(&thread, nullptr, ProcedureThread, this);
-    (*this).terminate = false;
+    thiz.terminate = false;
+    thiz.socket = 0;
+    thiz.backlog = backlog;
+    thiz.address = address ? strdup(address) : nullptr;
+    thiz.port = port ? strdup(port) : strdup("7777");
+    thiz.addrinfo = nullptr;
+    thiz.thread = nullptr;
+
+    pthread_attr_t attr;
+    ::pthread_attr_init(&attr);
+    ::pthread_attr_setstacksize(&attr, 65536);
+
+    ::pthread_create(&thiz.thread, &attr, ProcedureThread, this);
 }
 //------------------------------------------------------------------------------
 Listen::~Listen()
 {
-    terminate = true;
+    thiz.terminate = true;
 
-    if (socket > 0)
+    if (thiz.socket > 0)
     {
-        ::close(socket);
+        ::close(thiz.socket);
     }
-    if (address)
+    if (thiz.address)
     {
-        free(address);
+        free(thiz.address);
     }
-    if (port)
+    if (thiz.port)
     {
-        free(port);
+        free(thiz.port);
     }
-    if (thread)
+    if (thiz.thread)
     {
-        ::pthread_join(thread, nullptr);
+        ::pthread_join(thiz.thread, nullptr);
     }
-    if (addrinfo)
+    if (thiz.addrinfo)
     {
-        ::freeaddrinfo(addrinfo);
+        ::freeaddrinfo(thiz.addrinfo);
     }
 
     std::vector<Connect*> connectLocal;
-    connectMutex.lock();
-    connectArray.swap(connectLocal);
-    connectMutex.unlock();
+    thiz.connectMutex.lock();
+    thiz.connectArray.swap(connectLocal);
+    thiz.connectMutex.unlock();
     for (Connect* connect : connectLocal)
         delete connect;
 }
@@ -62,25 +67,25 @@ void Listen::Procedure()
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
-    ::getaddrinfo(address, port, &hints, &addrinfo);
-    if (addrinfo == nullptr)
+    ::getaddrinfo(thiz.address, thiz.port, &hints, &thiz.addrinfo);
+    if (thiz.addrinfo == nullptr)
         return;
 
-    socket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (socket <= 0)
+    thiz.socket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (thiz.socket <= 0)
         return;
 
-    if (::bind(socket, addrinfo->ai_addr, addrinfo->ai_addrlen) < 0)
+    if (::bind(thiz.socket, thiz.addrinfo->ai_addr, thiz.addrinfo->ai_addrlen) < 0)
         return;
 
-    if (::listen(socket, backlog) < 0)
+    if (::listen(thiz.socket, thiz.backlog) < 0)
         return;
 
-    while (terminate == false)
+    while (thiz.terminate == false)
     {
         struct sockaddr_storage addr = {};
         socklen_t size = 0;
-        int id = ::accept(socket, (struct sockaddr*)&addr, &size);
+        int id = ::accept(thiz.socket, (struct sockaddr*)&addr, &size);
         if (id < 0)
             return;
 
@@ -93,7 +98,7 @@ void Listen::Procedure()
         AttachConnect(connect);
     }
 
-    terminate = true;
+    thiz.terminate = true;
 }
 //------------------------------------------------------------------------------
 void* Listen::ProcedureThread(void* arg)
@@ -103,27 +108,27 @@ void* Listen::ProcedureThread(void* arg)
     return nullptr;
 }
 //------------------------------------------------------------------------------
-Connect* Listen::CreateConnect(int socket, const sockaddr_storage& addr)
+Connect* Listen::CreateConnect(int socket, const struct sockaddr_storage& addr)
 {
     return new Connect(socket, addr);
 }
 //------------------------------------------------------------------------------
 void Listen::AttachConnect(Connect* connect)
 {
-    connectMutex.lock();
-    connectArray.emplace_back(connect);
-    connectMutex.unlock();
+    thiz.connectMutex.lock();
+    thiz.connectArray.emplace_back(connect);
+    thiz.connectMutex.unlock();
 }
 //------------------------------------------------------------------------------
 void Listen::DetachConnect(Connect* connect)
 {
-    connectMutex.lock();
-    auto it = std::find(connectArray.begin(), connectArray.end(), connect);
-    if (it != connectArray.end())
+    thiz.connectMutex.lock();
+    auto it = std::find(thiz.connectArray.begin(), thiz.connectArray.end(), connect);
+    if (it != thiz.connectArray.end())
     {
-        (*it) = connectArray.back();
-        connectArray.pop_back();
+        (*it) = thiz.connectArray.back();
+        thiz.connectArray.pop_back();
     }
-    connectMutex.unlock();
+    thiz.connectMutex.unlock();
 }
 //------------------------------------------------------------------------------

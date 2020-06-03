@@ -12,8 +12,8 @@
 //------------------------------------------------------------------------------
 Framework::Framework()
 {
-    server = nullptr;
-    terminate = false;
+    thiz.terminate = false;
+    thiz.server = nullptr;
 }
 //------------------------------------------------------------------------------
 Framework::~Framework()
@@ -23,18 +23,18 @@ Framework::~Framework()
 //------------------------------------------------------------------------------
 void Framework::Push(Event* event)
 {
-    eventMutex.lock();
-    eventArray.emplace_back(event);
-    eventMutex.unlock();
+    thiz.eventMutex.lock();
+    thiz.eventArray.emplace_back(event);
+    thiz.eventMutex.unlock();
 }
 //------------------------------------------------------------------------------
 int Framework::Dispatch()
 {
     std::vector<Event*> eventLocal;
 
-    while (terminate == false)
+    while (thiz.terminate == false)
     {
-        if (eventArray.empty())
+        if (thiz.eventArray.empty())
         {
             struct timespec timespec;
             timespec.tv_sec = 0;
@@ -43,9 +43,9 @@ int Framework::Dispatch()
             continue;
         }
 
-        eventMutex.lock();
-        eventArray.swap(eventLocal);
-        eventMutex.unlock();
+        thiz.eventMutex.lock();
+        thiz.eventArray.swap(eventLocal);
+        thiz.eventMutex.unlock();
 
         for (Event* event : eventLocal)
         {
@@ -55,12 +55,12 @@ int Framework::Dispatch()
         eventLocal.clear();
     }
 
-    delete server;
-    server = nullptr;
+    delete thiz.server;
+    thiz.server = nullptr;
 
-    eventMutex.lock();
-    eventArray.swap(eventLocal);
-    eventMutex.unlock();
+    thiz.eventMutex.lock();
+    thiz.eventArray.swap(eventLocal);
+    thiz.eventMutex.unlock();
 
     for (Event* event : eventLocal)
         delete event;

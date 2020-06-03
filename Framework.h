@@ -6,19 +6,18 @@
 //==============================================================================
 #pragma once
 
-#include <mutex>
-#include <vector>
+#include "FrameworkHeader.h"
 
 class Event;
 class Listen;
 class Framework
 {
-    std::vector<Event*> eventArray;
-    std::mutex eventMutex;
+    volatile bool terminate;
 
     Listen* server;
 
-    volatile bool terminate;
+    std::vector<Event*> eventArray;
+    std::mutex eventMutex;
 
 public:
     Framework();
