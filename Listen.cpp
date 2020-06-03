@@ -7,6 +7,7 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include "Connect.h"
 #include "Log.h"
 #include "Listen.h"
@@ -86,11 +87,18 @@ void Listen::Procedure()
         return;
     }
 
+    int enable = 1;
+    ::setsockopt(thiz.socket, SOL_SOCKET, SO_REUSEADDR, (void*)&enable, sizeof(enable));
+    ::setsockopt(thiz.socket, SOL_SOCKET, SO_REUSEPORT, (void*)&enable, sizeof(enable));
+
     if (::bind(thiz.socket, thiz.addrinfo->ai_addr, thiz.addrinfo->ai_addrlen) != 0)
     {
         Log::Format(-1, "Socket %d : %s %s", thiz.socket, "bind", strerror(errno));
         return;
     }
+
+    int fastOpen = 5;
+    ::setsockopt(thiz.socket, SOL_TCP, TCP_FASTOPEN, &fastOpen, sizeof(fastOpen));
 
     if (::listen(thiz.socket, thiz.backlog) != 0)
     {

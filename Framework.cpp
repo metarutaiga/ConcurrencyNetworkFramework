@@ -13,12 +13,16 @@
 Framework::Framework()
 {
     thiz.terminate = false;
-    thiz.server = nullptr;
 }
 //------------------------------------------------------------------------------
 Framework::~Framework()
 {
 
+}
+//------------------------------------------------------------------------------
+void Framework::Server(Listen* server)
+{
+    thiz.serverArray.emplace_back(server);
 }
 //------------------------------------------------------------------------------
 void Framework::Push(Event* event)
@@ -55,15 +59,19 @@ int Framework::Dispatch()
         eventLocal.clear();
     }
 
-    delete thiz.server;
-    thiz.server = nullptr;
+    for (Listen* server : thiz.serverArray)
+    {
+        delete server;
+    }
+    thiz.serverArray.clear();
 
     thiz.eventMutex.lock();
     thiz.eventArray.swap(eventLocal);
     thiz.eventMutex.unlock();
-
     for (Event* event : eventLocal)
+    {
         delete event;
+    }
     eventLocal.clear();
 
     return 0;

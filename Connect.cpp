@@ -4,7 +4,9 @@
 // Copyright (c) 2020 TAiGA
 // https://github.com/metarutaiga/ConcurrencyNetworkFramework
 //==============================================================================
+#include <netdb.h>
 #include <unistd.h>
+#include <netinet/tcp.h>
 #include "Log.h"
 #include "Connect.h"
 
@@ -18,6 +20,10 @@ Connect::Connect(int socket, const struct sockaddr_storage& addr)
     thiz.threadSend = nullptr;
     thiz.sendBufferAvailable = 0;
     thiz.sendBufferSemaphore = ::sem_open("", O_CREAT);
+
+    int enable = 1;
+    ::setsockopt(thiz.socket, SOL_SOCKET, SO_KEEPALIVE, (void*)&enable, sizeof(enable));
+    ::setsockopt(thiz.socket, SOL_TCP, TCP_NODELAY, (void*)&enable, sizeof(enable));
 
     pthread_attr_t attr;
     ::pthread_attr_init(&attr);
@@ -102,7 +108,7 @@ void Connect::ProcedureSend()
                 continue;
 
             unsigned short size = (short)buffer.size();
-            if (::send(thiz.socket, &size, sizeof(short), MSG_WAITALL) <= 0)
+            if (::send(thiz.socket, &size, sizeof(short), MSG_WAITALL | MSG_MORE) <= 0)
             {
                 Log::Format(-1, "Socket %d : %s %s", thiz.socket, "send", strerror(errno));
                 break;

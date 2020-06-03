@@ -14,7 +14,7 @@ class Framework
 {
     volatile bool terminate;
 
-    Listen* server;
+    std::vector<Listen*> serverArray;
 
     std::vector<Event*> eventArray;
     std::mutex eventMutex;
@@ -22,6 +22,8 @@ class Framework
 public:
     Framework();
     virtual ~Framework();
+
+    void Server(Listen* server);
 
     void Push(Event* event);
 

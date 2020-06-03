@@ -14,4 +14,16 @@
 #include <mutex>
 #include <vector>
 
+#if defined(HAVE_CONFIG_H)
+#   include "config.h"
+#endif
+
+#ifndef MSG_MORE
+#   define MSG_MORE 0
+#endif
+
+#ifndef SOL_TCP
+#   define SOL_TCP IPPROTO_TCP
+#endif
+
 #define thiz (*this)
