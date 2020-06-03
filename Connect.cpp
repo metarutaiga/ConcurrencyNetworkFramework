@@ -5,6 +5,7 @@
 // https://github.com/metarutaiga/ConcurrencyNetworkFramework
 //==============================================================================
 #include <unistd.h>
+#include "Log.h"
 #include "Connect.h"
 
 //------------------------------------------------------------------------------
@@ -56,14 +57,22 @@ void Connect::ProcedureRecv()
 {
     std::vector<char> buffer;
 
+    thiz.terminate = false;
+
     while (thiz.terminate == false)
     {
         unsigned short size = 0;
-        if (::recv(thiz.socket, &size, sizeof(short), MSG_WAITALL) < 0)
+        if (::recv(thiz.socket, &size, sizeof(short), MSG_WAITALL) <= 0)
+        {
+            Log::Format(-1, "Socket %d : %s %s", thiz.socket, "recv", strerror(errno));
             break;
+        }
         buffer.resize(size);
-        if (::recv(thiz.socket, &buffer.front(), size, MSG_WAITALL) < 0)
+        if (::recv(thiz.socket, &buffer.front(), size, MSG_WAITALL) <= 0)
+        {
+            Log::Format(-1, "Socket %d : %s %s", thiz.socket, "recv", strerror(errno));
             break;
+        }
 
         Recv(buffer);
     }
@@ -73,12 +82,13 @@ void Connect::ProcedureRecv()
 //------------------------------------------------------------------------------
 void Connect::ProcedureSend()
 {
+    thiz.terminate = false;
+
     while (thiz.terminate == false)
     {
         sem_wait(thiz.sendBufferSemaphore);
 
-        int available = 0;
-        do
+        for (int available = 1; available > 0; available = thiz.sendBufferAvailable.fetch_sub(1, std::memory_order_acq_rel) - 1)
         {
             std::vector<char> buffer;
             thiz.sendBufferMutex.lock();
@@ -88,16 +98,21 @@ void Connect::ProcedureSend()
                 thiz.sendBuffer.erase(thiz.sendBuffer.begin());
             }
             thiz.sendBufferMutex.unlock();
-            if (buffer.empty() == false)
+            if (buffer.empty())
+                continue;
+
+            unsigned short size = (short)buffer.size();
+            if (::send(thiz.socket, &size, sizeof(short), MSG_WAITALL) <= 0)
             {
-                unsigned short size = (short)buffer.size();
-                if (::send(thiz.socket, &size, sizeof(short), MSG_WAITALL) < 0)
-                    break;
-                if (::send(thiz.socket, &buffer.front(), size, MSG_WAITALL) < 0)
-                    break;
+                Log::Format(-1, "Socket %d : %s %s", thiz.socket, "send", strerror(errno));
+                break;
             }
-            available = __sync_sub_and_fetch(&thiz.sendBufferAvailable, 1);
-        } while (available > 0);
+            if (::send(thiz.socket, &buffer.front(), size, MSG_WAITALL) <= 0)
+            {
+                Log::Format(-1, "Socket %d : %s %s", thiz.socket, "send", strerror(errno));
+                break;
+            }
+        }
     }
 
     thiz.terminate = true;
@@ -123,10 +138,10 @@ void Connect::Send(std::vector<char>&& buffer)
     thiz.sendBuffer.emplace_back(buffer);
     thiz.sendBufferMutex.unlock();
 
-    int available = __sync_add_and_fetch(&thiz.sendBufferAvailable, 1);
-    if (available <= 2)
+    int available = thiz.sendBufferAvailable.fetch_add(1, std::memory_order_acq_rel) + 1;
+    if (available <= 1)
     {
-        available = 2;
+        thiz.sendBufferAvailable.fetch_add(1, std::memory_order_acq_rel);
         sem_post(thiz.sendBufferSemaphore);
     }
 }

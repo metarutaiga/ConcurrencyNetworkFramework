@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include "Connect.h"
+#include "Log.h"
 #include "Listen.h"
 
 //------------------------------------------------------------------------------
@@ -58,36 +59,57 @@ Listen::~Listen()
     thiz.connectArray.swap(connectLocal);
     thiz.connectMutex.unlock();
     for (Connect* connect : connectLocal)
+    {
         delete connect;
+    }
 }
 //------------------------------------------------------------------------------
 void Listen::Procedure()
 {
+    thiz.terminate = true;
+
     struct addrinfo hints = {};
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
-    ::getaddrinfo(thiz.address, thiz.port, &hints, &thiz.addrinfo);
+    int error = ::getaddrinfo(thiz.address, thiz.port, &hints, &thiz.addrinfo);
     if (thiz.addrinfo == nullptr)
+    {
+        Log::Format(-1, "Socket %d : %s %s", thiz.socket, "getaddrinfo", gai_strerror(error));
         return;
+    }
 
-    thiz.socket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    thiz.socket = ::socket(thiz.addrinfo->ai_family, thiz.addrinfo->ai_socktype, thiz.addrinfo->ai_protocol);
     if (thiz.socket <= 0)
+    {
+        Log::Format(-1, "Socket %d : %s %s", thiz.socket, "socket", strerror(errno));
         return;
+    }
 
-    if (::bind(thiz.socket, thiz.addrinfo->ai_addr, thiz.addrinfo->ai_addrlen) < 0)
+    if (::bind(thiz.socket, thiz.addrinfo->ai_addr, thiz.addrinfo->ai_addrlen) != 0)
+    {
+        Log::Format(-1, "Socket %d : %s %s", thiz.socket, "bind", strerror(errno));
         return;
+    }
 
-    if (::listen(thiz.socket, thiz.backlog) < 0)
+    if (::listen(thiz.socket, thiz.backlog) != 0)
+    {
+        Log::Format(-1, "Socket %d : %s %s", thiz.socket, "listen", strerror(errno));
         return;
+    }
+
+    thiz.terminate = false;
 
     while (thiz.terminate == false)
     {
         struct sockaddr_storage addr = {};
         socklen_t size = 0;
         int id = ::accept(thiz.socket, (struct sockaddr*)&addr, &size);
-        if (id < 0)
-            return;
+        if (id <= 0)
+        {
+            Log::Format(-1, "Socket %d : %s %s", thiz.socket, "accept", strerror(errno));
+            break;
+        }
 
         Connect* connect = CreateConnect(id, addr);
         if (connect == nullptr)

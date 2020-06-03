@@ -10,6 +10,7 @@
 #include <semaphore.h>
 #include <sys/socket.h>
 
+#include <atomic>
 #include <mutex>
 #include <vector>
 
