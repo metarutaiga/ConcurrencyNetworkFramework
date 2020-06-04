@@ -106,7 +106,7 @@ void* Connect::ProcedureSendThread(void* arg)
     return nullptr;
 }
 //------------------------------------------------------------------------------
-void Connect::Start()
+bool Connect::Start()
 {
     int enable = 1;
     ::setsockopt(thiz.socket, SOL_SOCKET, SO_KEEPALIVE, (void*)&enable, sizeof(enable));
@@ -118,6 +118,8 @@ void Connect::Start()
 
     ::pthread_create(&thiz.threadRecv, &attr, ProcedureRecvThread, this);
     ::pthread_create(&thiz.threadSend, &attr, ProcedureSendThread, this);
+
+    return thiz.threadRecv && thiz.threadSend;
 }
 //------------------------------------------------------------------------------
 void Connect::Stop()

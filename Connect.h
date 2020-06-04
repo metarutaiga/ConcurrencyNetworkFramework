@@ -32,7 +32,7 @@ public:
     Connect(int socket, const struct sockaddr_storage& addr);
     virtual ~Connect();
 
-    virtual void Start();
+    virtual bool Start();
     virtual void Stop();
 
     virtual void Send(std::vector<char>&& buffer);

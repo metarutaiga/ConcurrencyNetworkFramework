@@ -50,8 +50,13 @@ void Listen::Procedure()
             ::close(id);
             continue;
         }
+        if (connect->Start() == false)
+        {
+            connect->Stop();
+            delete connect;
+            continue;
+        }
         AttachConnect(connect);
-        connect->Start();
     }
 
     thiz.terminate = true;
@@ -64,7 +69,7 @@ void* Listen::ProcedureThread(void* arg)
     return nullptr;
 }
 //------------------------------------------------------------------------------
-void Listen::Start()
+bool Listen::Start()
 {
     struct addrinfo hints = {};
     hints.ai_family = AF_UNSPEC;
@@ -74,14 +79,14 @@ void Listen::Start()
     if (thiz.addrinfo == nullptr)
     {
         Log::Format(-1, "Socket %d : %s %s", thiz.socket, "getaddrinfo", gai_strerror(error));
-        return;
+        return false;
     }
 
     thiz.socket = ::socket(thiz.addrinfo->ai_family, thiz.addrinfo->ai_socktype, thiz.addrinfo->ai_protocol);
     if (thiz.socket <= 0)
     {
         Log::Format(-1, "Socket %d : %s %s", thiz.socket, "socket", strerror(errno));
-        return;
+        return false;
     }
 
     int enable = 1;
@@ -91,7 +96,7 @@ void Listen::Start()
     if (::bind(thiz.socket, thiz.addrinfo->ai_addr, thiz.addrinfo->ai_addrlen) != 0)
     {
         Log::Format(-1, "Socket %d : %s %s", thiz.socket, "bind", strerror(errno));
-        return;
+        return false;
     }
 
     int fastOpen = 5;
@@ -100,7 +105,7 @@ void Listen::Start()
     if (::listen(thiz.socket, thiz.backlog) != 0)
     {
         Log::Format(-1, "Socket %d : %s %s", thiz.socket, "listen", strerror(errno));
-        return;
+        return false;
     }
 
     pthread_attr_t attr;
@@ -108,8 +113,14 @@ void Listen::Start()
     ::pthread_attr_setstacksize(&attr, 65536);
 
     ::pthread_create(&thiz.thread, &attr, ProcedureThread, this);
+    if (thiz.thread == nullptr)
+    {
+        Log::Format(-1, "Socket %d : %s %s", thiz.socket, "thread", strerror(errno));
+        return false;
+    }
 
     Log::Format(0, "Socket %d : %s %s", thiz.socket, address, port);
+    return true;
 }
 //------------------------------------------------------------------------------
 void Listen::Stop()
