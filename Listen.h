@@ -31,6 +31,9 @@ public:
     Listen(const char* address, const char* port, int backlog = 128);
     virtual ~Listen();
 
+    virtual void Start();
+    virtual void Stop();
+
     virtual Connect* CreateConnect(int socket, const struct sockaddr_storage& addr);
     virtual void AttachConnect(Connect* connect);
     virtual void DetachConnect(Connect* connect);

@@ -7,6 +7,7 @@
 #include "time.h"
 #include "Event.h"
 #include "Listen.h"
+#include "Log.h"
 #include "Framework.h"
 
 //------------------------------------------------------------------------------
@@ -18,6 +19,11 @@ Framework::Framework()
 Framework::~Framework()
 {
 
+}
+//------------------------------------------------------------------------------
+void Framework::Terminate()
+{
+    thiz.terminate = true;
 }
 //------------------------------------------------------------------------------
 void Framework::Server(Listen* server)
@@ -34,18 +40,34 @@ void Framework::Push(Event* event)
 //------------------------------------------------------------------------------
 int Framework::Dispatch()
 {
+    int idleTime = 0;
     std::vector<Event*> eventLocal;
 
+    Log::Format(0, "Framework : Start");
+    for (Listen* server : thiz.serverArray)
+    {
+        server->Start();
+    }
+
+    Log::Format(0, "Framework : Loop");
     while (thiz.terminate == false)
     {
         if (thiz.eventArray.empty())
         {
+            idleTime++;
+            if (idleTime >= 60 * 60)
+            {
+                idleTime = 0;
+                Log::Format(0, "Framework : Idle");
+            }
+
             struct timespec timespec;
             timespec.tv_sec = 0;
             timespec.tv_nsec = 1000 * 1000 * 1000 / 60;
             nanosleep(&timespec, nullptr);
             continue;
         }
+        idleTime = 0;
 
         thiz.eventMutex.lock();
         thiz.eventArray.swap(eventLocal);
@@ -58,10 +80,11 @@ int Framework::Dispatch()
         }
         eventLocal.clear();
     }
+    Log::Format(0, "Framework : Shutdown");
 
     for (Listen* server : thiz.serverArray)
     {
-        delete server;
+        server->Stop();
     }
     thiz.serverArray.clear();
 
@@ -74,6 +97,7 @@ int Framework::Dispatch()
     }
     eventLocal.clear();
 
+    Log::Format(0, "Framework : Terminate");
     return 0;
 }
 //------------------------------------------------------------------------------

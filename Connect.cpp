@@ -20,43 +20,11 @@ Connect::Connect(int socket, const struct sockaddr_storage& addr)
     thiz.threadSend = nullptr;
     thiz.sendBufferAvailable = 0;
     thiz.sendBufferSemaphore = ::sem_open("", O_CREAT);
-
-    int enable = 1;
-    ::setsockopt(thiz.socket, SOL_SOCKET, SO_KEEPALIVE, (void*)&enable, sizeof(enable));
-    ::setsockopt(thiz.socket, SOL_TCP, TCP_NODELAY, (void*)&enable, sizeof(enable));
-
-    pthread_attr_t attr;
-    ::pthread_attr_init(&attr);
-    ::pthread_attr_setstacksize(&attr, 65536);
-
-    ::pthread_create(&thiz.threadRecv, &attr, ProcedureRecvThread, this);
-    ::pthread_create(&thiz.threadSend, &attr, ProcedureSendThread, this);
 }
 //------------------------------------------------------------------------------
 Connect::~Connect()
 {
-    thiz.terminate = true;
-
-    if (thiz.socket > 0)
-    {
-        ::close(thiz.socket);
-    }
-    if (thiz.sendBufferSemaphore)
-    {
-        ::sem_post(thiz.sendBufferSemaphore);
-    }
-    if (thiz.threadRecv)
-    {
-        ::pthread_join(thiz.threadRecv, nullptr);
-    }
-    if (thiz.threadSend)
-    {
-        ::pthread_join(thiz.threadSend, nullptr);
-    }
-    if (thiz.sendBufferSemaphore)
-    {
-        ::sem_close(thiz.sendBufferSemaphore);
-    }
+    Stop();
 }
 //------------------------------------------------------------------------------
 void Connect::ProcedureRecv()
@@ -136,6 +104,51 @@ void* Connect::ProcedureSendThread(void* arg)
     Connect& connect = *(Connect*)arg;
     connect.ProcedureSend();
     return nullptr;
+}
+//------------------------------------------------------------------------------
+void Connect::Start()
+{
+    int enable = 1;
+    ::setsockopt(thiz.socket, SOL_SOCKET, SO_KEEPALIVE, (void*)&enable, sizeof(enable));
+    ::setsockopt(thiz.socket, SOL_TCP, TCP_NODELAY, (void*)&enable, sizeof(enable));
+
+    pthread_attr_t attr;
+    ::pthread_attr_init(&attr);
+    ::pthread_attr_setstacksize(&attr, 65536);
+
+    ::pthread_create(&thiz.threadRecv, &attr, ProcedureRecvThread, this);
+    ::pthread_create(&thiz.threadSend, &attr, ProcedureSendThread, this);
+}
+//------------------------------------------------------------------------------
+void Connect::Stop()
+{
+    thiz.terminate = true;
+
+    if (thiz.socket > 0)
+    {
+        ::close(thiz.socket);
+        thiz.socket = 0;
+    }
+    if (thiz.sendBufferSemaphore)
+    {
+        ::sem_post(thiz.sendBufferSemaphore);
+        thiz.sendBufferSemaphore = nullptr;
+    }
+    if (thiz.threadRecv)
+    {
+        ::pthread_join(thiz.threadRecv, nullptr);
+        thiz.threadRecv = nullptr;
+    }
+    if (thiz.threadSend)
+    {
+        ::pthread_join(thiz.threadSend, nullptr);
+        thiz.threadSend = nullptr;
+    }
+    if (thiz.sendBufferSemaphore)
+    {
+        ::sem_close(thiz.sendBufferSemaphore);
+        thiz.sendBufferSemaphore = nullptr;
+    }
 }
 //------------------------------------------------------------------------------
 void Connect::Send(std::vector<char>&& buffer)

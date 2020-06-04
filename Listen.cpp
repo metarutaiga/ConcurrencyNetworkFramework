@@ -22,53 +22,50 @@ Listen::Listen(const char* address, const char* port, int backlog)
     thiz.port = port ? strdup(port) : strdup("7777");
     thiz.addrinfo = nullptr;
     thiz.thread = nullptr;
-
-    pthread_attr_t attr;
-    ::pthread_attr_init(&attr);
-    ::pthread_attr_setstacksize(&attr, 65536);
-
-    ::pthread_create(&thiz.thread, &attr, ProcedureThread, this);
 }
 //------------------------------------------------------------------------------
 Listen::~Listen()
 {
-    thiz.terminate = true;
-
-    if (thiz.socket > 0)
-    {
-        ::close(thiz.socket);
-    }
-    if (thiz.address)
-    {
-        free(thiz.address);
-    }
-    if (thiz.port)
-    {
-        free(thiz.port);
-    }
-    if (thiz.thread)
-    {
-        ::pthread_join(thiz.thread, nullptr);
-    }
-    if (thiz.addrinfo)
-    {
-        ::freeaddrinfo(thiz.addrinfo);
-    }
-
-    std::vector<Connect*> connectLocal;
-    thiz.connectMutex.lock();
-    thiz.connectArray.swap(connectLocal);
-    thiz.connectMutex.unlock();
-    for (Connect* connect : connectLocal)
-    {
-        delete connect;
-    }
+    Stop();
 }
 //------------------------------------------------------------------------------
 void Listen::Procedure()
 {
-    thiz.terminate = true;
+    thiz.terminate = false;
 
+    while (thiz.terminate == false)
+    {
+        struct sockaddr_storage addr = {};
+        socklen_t size = 0;
+        int id = ::accept(thiz.socket, (struct sockaddr*)&addr, &size);
+        if (id <= 0)
+        {
+            Log::Format(-1, "Socket %d : %s %s", thiz.socket, "accept", strerror(errno));
+            break;
+        }
+
+        Connect* connect = CreateConnect(id, addr);
+        if (connect == nullptr)
+        {
+            ::close(id);
+            continue;
+        }
+        AttachConnect(connect);
+        connect->Start();
+    }
+
+    thiz.terminate = true;
+}
+//------------------------------------------------------------------------------
+void* Listen::ProcedureThread(void* arg)
+{
+    Listen& listen = *(Listen*)arg;
+    listen.Procedure();
+    return nullptr;
+}
+//------------------------------------------------------------------------------
+void Listen::Start()
+{
     struct addrinfo hints = {};
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
@@ -106,36 +103,54 @@ void Listen::Procedure()
         return;
     }
 
-    thiz.terminate = false;
+    pthread_attr_t attr;
+    ::pthread_attr_init(&attr);
+    ::pthread_attr_setstacksize(&attr, 65536);
 
-    while (thiz.terminate == false)
-    {
-        struct sockaddr_storage addr = {};
-        socklen_t size = 0;
-        int id = ::accept(thiz.socket, (struct sockaddr*)&addr, &size);
-        if (id <= 0)
-        {
-            Log::Format(-1, "Socket %d : %s %s", thiz.socket, "accept", strerror(errno));
-            break;
-        }
+    ::pthread_create(&thiz.thread, &attr, ProcedureThread, this);
 
-        Connect* connect = CreateConnect(id, addr);
-        if (connect == nullptr)
-        {
-            ::close(id);
-            continue;
-        }
-        AttachConnect(connect);
-    }
-
-    thiz.terminate = true;
+    Log::Format(0, "Socket %d : %s %s", thiz.socket, address, port);
 }
 //------------------------------------------------------------------------------
-void* Listen::ProcedureThread(void* arg)
+void Listen::Stop()
 {
-    Listen& listen = *(Listen*)arg;
-    listen.Procedure();
-    return nullptr;
+    thiz.terminate = true;
+
+    if (thiz.socket > 0)
+    {
+        ::close(thiz.socket);
+        thiz.socket = 0;
+    }
+    if (thiz.address)
+    {
+        free(thiz.address);
+        thiz.address = nullptr;
+    }
+    if (thiz.port)
+    {
+        free(thiz.port);
+        thiz.port = nullptr;
+    }
+    if (thiz.thread)
+    {
+        ::pthread_join(thiz.thread, nullptr);
+        thiz.thread = nullptr;
+    }
+    if (thiz.addrinfo)
+    {
+        ::freeaddrinfo(thiz.addrinfo);
+        thiz.addrinfo = nullptr;
+    }
+
+    std::vector<Connect*> connectLocal;
+    thiz.connectMutex.lock();
+    thiz.connectArray.swap(connectLocal);
+    thiz.connectMutex.unlock();
+    for (Connect* connect : connectLocal)
+    {
+        connect->Stop();
+        delete connect;
+    }
 }
 //------------------------------------------------------------------------------
 Connect* Listen::CreateConnect(int socket, const struct sockaddr_storage& addr)

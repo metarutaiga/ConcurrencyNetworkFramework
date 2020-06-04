@@ -23,11 +23,13 @@ public:
     Framework();
     virtual ~Framework();
 
-    void Server(Listen* server);
+    virtual void Terminate();
 
-    void Push(Event* event);
+    virtual void Server(Listen* server);
 
-    int Dispatch();
+    virtual void Push(Event* event);
+
+    virtual int Dispatch();
 
     static Framework& Instance();
 };

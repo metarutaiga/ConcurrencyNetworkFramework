@@ -32,6 +32,9 @@ public:
     Connect(int socket, const struct sockaddr_storage& addr);
     virtual ~Connect();
 
+    virtual void Start();
+    virtual void Stop();
+
     virtual void Send(std::vector<char>&& buffer);
     virtual void Recv(const std::vector<char>& buffer) const;
 };
