@@ -19,7 +19,7 @@ class Connect
 
     std::vector<std::vector<char>> sendBuffer;
     std::mutex sendBufferMutex;
-    std::atomic_int sendBufferAvailable;
+    int sendBufferAvailable;
     sem_t* sendBufferSemaphore;
 
 private:

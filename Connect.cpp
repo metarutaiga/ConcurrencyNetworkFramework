@@ -94,7 +94,7 @@ void Connect::ProcedureSend()
     {
         sem_wait(thiz.sendBufferSemaphore);
 
-        for (int available = 1; available > 0; available = thiz.sendBufferAvailable.fetch_sub(1, std::memory_order_acq_rel) - 1)
+        for (int available = 1; available > 0; available = __atomic_sub_fetch(&thiz.sendBufferAvailable, 1, __ATOMIC_ACQ_REL))
         {
             std::vector<char> buffer;
             thiz.sendBufferMutex.lock();
@@ -144,10 +144,10 @@ void Connect::Send(std::vector<char>&& buffer)
     thiz.sendBuffer.emplace_back(buffer);
     thiz.sendBufferMutex.unlock();
 
-    int available = thiz.sendBufferAvailable.fetch_add(1, std::memory_order_acq_rel) + 1;
+    int available = __atomic_add_fetch(&thiz.sendBufferAvailable, 1, __ATOMIC_ACQ_REL);
     if (available <= 1)
     {
-        thiz.sendBufferAvailable.fetch_add(1, std::memory_order_acq_rel);
+        __atomic_add_fetch(&thiz.sendBufferAvailable, 1, __ATOMIC_ACQ_REL);
         sem_post(thiz.sendBufferSemaphore);
     }
 }
