@@ -8,8 +8,12 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <netinet/tcp.h>
+#include "Listen.h"
 #include "Log.h"
 #include "Connect.h"
+
+#define CONNECT_LOG(level, format, ...) \
+    Log::Format(level, "%s %d (%s:%s@%s:%s) : " format, "Connect", thiz.socket, thiz.sourceAddress, thiz.sourcePort, thiz.destinationAddress, thiz.destinationPort, __VA_ARGS__)
 
 //------------------------------------------------------------------------------
 Connect::Connect(int socket, const char* address, const char* port, const struct sockaddr_storage& addr)
@@ -22,8 +26,9 @@ Connect::Connect(int socket, const char* address, const char* port, const struct
     thiz.destinationPort = nullptr;
     thiz.threadRecv = nullptr;
     thiz.threadSend = nullptr;
-    thiz.sendBufferAvailable = 0;
-    thiz.sendBufferSemaphore = ::sem_open("", O_CREAT);
+    thiz.sendBufferAvailable = 1;
+    thiz.sendBufferSemaphore = sem_t();
+    sem_init(&thiz.sendBufferSemaphore, 0, 0);
 
     GetAddressPort(addr, thiz.destinationAddress, thiz.destinationPort);
 }
@@ -38,8 +43,9 @@ Connect::Connect(const char* address, const char* port)
     thiz.destinationPort = port ? strdup(port) : nullptr;
     thiz.threadRecv = nullptr;
     thiz.threadSend = nullptr;
-    thiz.sendBufferAvailable = 0;
-    thiz.sendBufferSemaphore = ::sem_open("", O_CREAT);
+    thiz.sendBufferAvailable = 1;
+    thiz.sendBufferSemaphore = sem_t();
+    sem_init(&thiz.sendBufferSemaphore, 0, 0);
 
     struct addrinfo* addrinfo = nullptr;
     struct addrinfo hints = {};
@@ -49,21 +55,21 @@ Connect::Connect(const char* address, const char* port)
     int error = ::getaddrinfo(thiz.destinationAddress, thiz.destinationPort, &hints, &addrinfo);
     if (addrinfo == nullptr)
     {
-        Log::Format(-1, "%s %d (%s:%s@%s:%s) : %s %s", "Connect", thiz.socket, thiz.sourceAddress, thiz.sourcePort, thiz.destinationAddress, thiz.destinationPort, "getaddrinfo", gai_strerror(error));
+        CONNECT_LOG(-1, "%s %s", "getaddrinfo", gai_strerror(error));
         return;
     }
 
     thiz.socket = ::socket(addrinfo->ai_family, addrinfo->ai_socktype, addrinfo->ai_protocol);
     if (thiz.socket <= 0)
     {
-        Log::Format(-1, "%s %d (%s:%s@%s:%s) : %s %s", "Connect", thiz.socket, thiz.sourceAddress, thiz.sourcePort, thiz.destinationAddress, thiz.destinationPort, "socket", strerror(errno));
+        CONNECT_LOG(-1, "%s %s", "socket", strerror(errno));
         ::freeaddrinfo(addrinfo);
         return;
     }
 
     if (::connect(thiz.socket, addrinfo->ai_addr, addrinfo->ai_addrlen) < 0)
     {
-        Log::Format(-1, "%s %d (%s:%s@%s:%s) : %s %s", "Connect", thiz.socket, thiz.sourceAddress, thiz.sourcePort, thiz.destinationAddress, thiz.destinationPort, "connect", strerror(errno));
+        CONNECT_LOG(-1, "%s %s", "connect", strerror(errno));
         ::freeaddrinfo(addrinfo);
         return;
     }
@@ -81,6 +87,42 @@ Connect::Connect(const char* address, const char* port)
 Connect::~Connect()
 {
     Stop();
+
+    if (thiz.threadRecv)
+    {
+        ::pthread_join(thiz.threadRecv, nullptr);
+        thiz.threadRecv = nullptr;
+    }
+    if (thiz.threadSend)
+    {
+        ::pthread_join(thiz.threadSend, nullptr);
+        thiz.threadSend = nullptr;
+    }
+    if (thiz.sendBufferSemaphore)
+    {
+        sem_destroy(&thiz.sendBufferSemaphore);
+        thiz.sendBufferSemaphore = sem_t();
+    }
+    if (thiz.sourceAddress)
+    {
+        free(thiz.sourceAddress);
+        thiz.sourceAddress = nullptr;
+    }
+    if (thiz.sourcePort)
+    {
+        free(thiz.sourcePort);
+        thiz.sourcePort = nullptr;
+    }
+    if (thiz.destinationAddress)
+    {
+        free(thiz.destinationAddress);
+        thiz.destinationAddress = nullptr;
+    }
+    if (thiz.destinationPort)
+    {
+        free(thiz.destinationPort);
+        thiz.destinationPort = nullptr;
+    }
 }
 //------------------------------------------------------------------------------
 void Connect::ProcedureRecv()
@@ -94,13 +136,13 @@ void Connect::ProcedureRecv()
         unsigned short size = 0;
         if (::recv(thiz.socket, &size, sizeof(short), MSG_WAITALL | MSG_NOSIGNAL) <= 0)
         {
-            Log::Format(-1, "%s %d (%s:%s@%s:%s) : %s %s", "Connect", thiz.socket, thiz.sourceAddress, thiz.sourcePort, thiz.destinationAddress, thiz.destinationPort, "recv", strerror(errno));
+            CONNECT_LOG(-1, "%s %s", "recv", strerror(errno));
             break;
         }
         buffer.resize(size);
         if (::recv(thiz.socket, &buffer.front(), size, MSG_WAITALL | MSG_NOSIGNAL) <= 0)
         {
-            Log::Format(-1, "%s %d (%s:%s@%s:%s) : %s %s", "Connect", thiz.socket, thiz.sourceAddress, thiz.sourcePort, thiz.destinationAddress, thiz.destinationPort, "recv", strerror(errno));
+            CONNECT_LOG(-1, "%s %s", "recv", strerror(errno));
             break;
         }
 
@@ -112,15 +154,14 @@ void Connect::ProcedureRecv()
 //------------------------------------------------------------------------------
 void Connect::ProcedureSend()
 {
+    std::vector<char> buffer;
+
     thiz.terminate = false;
 
     while (thiz.terminate == false)
     {
-        sem_wait(thiz.sendBufferSemaphore);
-
         for (int available = 1; available > 0; available = __atomic_sub_fetch(&thiz.sendBufferAvailable, 1, __ATOMIC_ACQ_REL))
         {
-            std::vector<char> buffer;
             thiz.sendBufferMutex.lock();
             if (thiz.sendBuffer.empty() == false)
             {
@@ -134,15 +175,26 @@ void Connect::ProcedureSend()
             unsigned short size = (short)buffer.size();
             if (::send(thiz.socket, &size, sizeof(short), MSG_WAITALL | MSG_NOSIGNAL | MSG_MORE) <= 0)
             {
-                Log::Format(-1, "%s %d (%s:%s@%s:%s) : %s %s", "Connect", thiz.socket, thiz.sourceAddress, thiz.sourcePort, thiz.destinationAddress, thiz.destinationPort, "send", strerror(errno));
+                CONNECT_LOG(-1, "%s %s", "send", strerror(errno));
                 break;
             }
             if (::send(thiz.socket, &buffer.front(), size, MSG_WAITALL | MSG_NOSIGNAL) <= 0)
             {
-                Log::Format(-1, "%s %d (%s:%s@%s:%s) : %s %s", "Connect", thiz.socket, thiz.sourceAddress, thiz.sourcePort, thiz.destinationAddress, thiz.destinationPort, "send", strerror(errno));
+                CONNECT_LOG(-1, "%s %s", "send", strerror(errno));
                 break;
             }
+
+            buffer.clear();
         }
+
+#if 1
+        struct timespec timespec;
+        timespec.tv_sec = 10;
+        timespec.tv_nsec = 0;
+        sem_timedwait(&thiz.sendBufferSemaphore, &timespec);
+#else
+        sem_wait(&thiz.sendBufferSemaphore);
+#endif
     }
 
     thiz.terminate = true;
@@ -181,11 +233,11 @@ bool Connect::Start()
     ::pthread_create(&thiz.threadSend, &attr, ProcedureSendThread, this);
     if (thiz.threadRecv == nullptr || thiz.threadSend == nullptr)
     {
-        Log::Format(-1, "%s %d (%s:%s@%s:%s) : %s %s", "Connect", thiz.socket, thiz.sourceAddress, thiz.sourcePort, thiz.destinationAddress, thiz.destinationPort, "thread", strerror(errno));
+        CONNECT_LOG(-1, "%s %s", "thread", strerror(errno));
         return false;
     }
 
-    Log::Format(0, "%s %d (%s:%s@%s:%s) : %s %s", "Connect", thiz.socket, thiz.sourceAddress, thiz.sourcePort, thiz.destinationAddress, thiz.destinationPort, "connect", "ready");
+    CONNECT_LOG(0, "%s %s", "connect", "ready");
     return true;
 }
 //------------------------------------------------------------------------------
@@ -200,44 +252,23 @@ void Connect::Stop()
     }
     if (thiz.sendBufferSemaphore)
     {
-        ::sem_post(thiz.sendBufferSemaphore);
-        thiz.sendBufferSemaphore = nullptr;
+        sem_post(&thiz.sendBufferSemaphore);
     }
-    if (thiz.threadRecv)
-    {
-        ::pthread_join(thiz.threadRecv, nullptr);
-        thiz.threadRecv = nullptr;
-    }
-    if (thiz.threadSend)
-    {
-        ::pthread_join(thiz.threadSend, nullptr);
-        thiz.threadSend = nullptr;
-    }
-    if (thiz.sendBufferSemaphore)
-    {
-        ::sem_close(thiz.sendBufferSemaphore);
-        thiz.sendBufferSemaphore = nullptr;
-    }
-    if (thiz.sourceAddress)
-    {
-        free(thiz.sourceAddress);
-        thiz.sourceAddress = nullptr;
-    }
-    if (thiz.sourcePort)
-    {
-        free(thiz.sourcePort);
-        thiz.sourcePort = nullptr;
-    }
-    if (thiz.destinationAddress)
-    {
-        free(thiz.destinationAddress);
-        thiz.destinationAddress = nullptr;
-    }
-    if (thiz.destinationPort)
-    {
-        free(thiz.destinationPort);
-        thiz.destinationPort = nullptr;
-    }
+}
+//------------------------------------------------------------------------------
+bool Connect::Alive()
+{
+    return (terminate == false);
+}
+//------------------------------------------------------------------------------
+void Connect::Disconnect()
+{
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+
+    pthread_t thread;
+    pthread_create(&thread, &attr, [](void* arg) -> void* { delete (Connect*)arg; return nullptr; }, this);
 }
 //------------------------------------------------------------------------------
 void Connect::Send(std::vector<char>&& buffer)
@@ -250,13 +281,13 @@ void Connect::Send(std::vector<char>&& buffer)
     if (available <= 1)
     {
         __atomic_add_fetch(&thiz.sendBufferAvailable, 1, __ATOMIC_ACQ_REL);
-        sem_post(thiz.sendBufferSemaphore);
+        sem_post(&thiz.sendBufferSemaphore);
     }
 }
 //------------------------------------------------------------------------------
 void Connect::Recv(const std::vector<char>& buffer) const
 {
-    
+    CONNECT_LOG(0, "%s %zd", "recv", buffer.size());
 }
 //------------------------------------------------------------------------------
 void Connect::GetAddressPort(const struct sockaddr_storage& addr, char*& address, char*& port)

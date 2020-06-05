@@ -12,6 +12,9 @@
 #include "Log.h"
 #include "Listen.h"
 
+#define LISTEN_LOG(level, format, ...) \
+    Log::Format(level, "%s %d (%s:%s) : " format, "Listen", thiz.socket, thiz.address, thiz.port, __VA_ARGS__)
+
 //------------------------------------------------------------------------------
 Listen::Listen(const char* address, const char* port, int backlog)
 {
@@ -20,7 +23,8 @@ Listen::Listen(const char* address, const char* port, int backlog)
     thiz.backlog = backlog;
     thiz.address = address ? strdup(address) : nullptr;
     thiz.port = port ? strdup(port) : strdup("7777");
-    thiz.thread = nullptr;
+    thiz.threadListen = nullptr;
+    thiz.threadCheck = nullptr;
 }
 //------------------------------------------------------------------------------
 Listen::~Listen()
@@ -39,7 +43,7 @@ Listen::~Listen()
     }
 }
 //------------------------------------------------------------------------------
-void Listen::Procedure()
+void Listen::ProcedureListen()
 {
     thiz.terminate = false;
 
@@ -50,13 +54,13 @@ void Listen::Procedure()
         int id = ::accept(thiz.socket, (struct sockaddr*)&addr, &size);
         if (id <= 0)
         {
-            Log::Format(-1, "%s %d (%s:%s) : %s %s", "Listen", thiz.socket, thiz.address, thiz.port, "accept", strerror(errno));
+            LISTEN_LOG(-1, "%s %s", "accept", strerror(errno));
             break;
         }
         char* address = nullptr;
         char* port = nullptr;
         Connect::GetAddressPort(addr, address, port);
-        Log::Format(0, "%s %d (%s:%s) : %s %d (%s:%s)", "Listen", thiz.socket, thiz.address, thiz.port, "accept", id, address, port);
+        LISTEN_LOG(0, "%s %d (%s:%s)", "accept", id, address, port);
         free(address);
         free(port);
 
@@ -69,19 +73,61 @@ void Listen::Procedure()
         if (connect->Start() == false)
         {
             connect->Stop();
-            delete connect;
+            connect->Disconnect();
             continue;
         }
-        AttachConnect(connect);
+        thiz.connectMutex.lock();
+        thiz.connectArray.emplace_back(connect);
+        thiz.connectMutex.unlock();
     }
 
     thiz.terminate = true;
 }
 //------------------------------------------------------------------------------
-void* Listen::ProcedureThread(void* arg)
+void Listen::ProcedureCheck()
+{
+    thiz.terminate = false;
+
+    while (thiz.terminate == false)
+    {
+        struct timespec timespec;
+        timespec.tv_sec = 0;
+        timespec.tv_nsec = 1000 * 1000 * 1000 / 60;
+        nanosleep(&timespec, nullptr);
+
+        thiz.connectMutex.lock();
+        size_t count = thiz.connectArray.size();
+        if (count)
+        {
+            size_t offset = rand() % count;
+            if (thiz.connectArray.size() > offset)
+            {
+                auto it = connectArray.begin() + offset;
+                Connect* connect = (*it);
+                if (connect->Alive() == false)
+                {
+                    connect->Stop();
+                    connectArray.erase(it);
+                }
+            }
+        }
+        thiz.connectMutex.unlock();
+    }
+
+    thiz.terminate = true;
+}
+//------------------------------------------------------------------------------
+void* Listen::ProcedureListenThread(void* arg)
 {
     Listen& listen = *(Listen*)arg;
-    listen.Procedure();
+    listen.ProcedureListen();
+    return nullptr;
+}
+//------------------------------------------------------------------------------
+void* Listen::ProcedureCheckThread(void* arg)
+{
+    Listen& listen = *(Listen*)arg;
+    listen.ProcedureCheck();
     return nullptr;
 }
 //------------------------------------------------------------------------------
@@ -95,14 +141,14 @@ bool Listen::Start()
     int error = ::getaddrinfo(thiz.address, thiz.port, &hints, &addrinfo);
     if (addrinfo == nullptr)
     {
-        Log::Format(-1, "%s %d (%s:%s) : %s %s", "Listen", thiz.socket, thiz.address, thiz.port, "getaddrinfo", gai_strerror(error));
+        LISTEN_LOG(-1, "%s %s", "getaddrinfo", gai_strerror(error));
         return false;
     }
 
     thiz.socket = ::socket(addrinfo->ai_family, addrinfo->ai_socktype, addrinfo->ai_protocol);
     if (thiz.socket <= 0)
     {
-        Log::Format(-1, "%s %d (%s:%s) : %s %s", "Listen", thiz.socket, thiz.address, thiz.port, "socket", strerror(errno));
+        LISTEN_LOG(-1, "%s %s", "socket", strerror(errno));
         freeaddrinfo(addrinfo);
         return false;
     }
@@ -113,7 +159,7 @@ bool Listen::Start()
 
     if (::bind(thiz.socket, addrinfo->ai_addr, addrinfo->ai_addrlen) != 0)
     {
-        Log::Format(-1, "%s %d (%s:%s) : %s %s", "Listen", thiz.socket, thiz.address, thiz.port, "bind", strerror(errno));
+        LISTEN_LOG(-1, "%s %s", "bind", strerror(errno));
         freeaddrinfo(addrinfo);
         return false;
     }
@@ -124,7 +170,7 @@ bool Listen::Start()
 
     if (::listen(thiz.socket, thiz.backlog) != 0)
     {
-        Log::Format(-1, "%s %d (%s:%s) : %s %s", "Listen", thiz.socket, thiz.address, thiz.port, "listen", strerror(errno));
+        LISTEN_LOG(-1, "%s %s", "listen", strerror(errno));
         return false;
     }
 
@@ -132,14 +178,15 @@ bool Listen::Start()
     ::pthread_attr_init(&attr);
     ::pthread_attr_setstacksize(&attr, 65536);
 
-    ::pthread_create(&thiz.thread, &attr, ProcedureThread, this);
-    if (thiz.thread == nullptr)
+    ::pthread_create(&thiz.threadListen, &attr, ProcedureListenThread, this);
+    ::pthread_create(&thiz.threadCheck, &attr, ProcedureCheckThread, this);
+    if (thiz.threadListen == nullptr || thiz.threadCheck == nullptr)
     {
-        Log::Format(-1, "%s %d (%s:%s) : %s %s", "Listen", thiz.socket, thiz.address, thiz.port, "thread", strerror(errno));
+        LISTEN_LOG(-1, "%s %s", "thread", strerror(errno));
         return false;
     }
 
-    Log::Format(0, "%s %d (%s:%s) : %s %s", "Listen", thiz.socket, thiz.address, thiz.port, "listen", "ready");
+    LISTEN_LOG(0, "%s %s", "listen", "ready");
     return true;
 }
 //------------------------------------------------------------------------------
@@ -152,10 +199,15 @@ void Listen::Stop()
         ::close(thiz.socket);
         thiz.socket = 0;
     }
-    if (thiz.thread)
+    if (thiz.threadListen)
     {
-        ::pthread_join(thiz.thread, nullptr);
-        thiz.thread = nullptr;
+        ::pthread_join(thiz.threadListen, nullptr);
+        thiz.threadListen = nullptr;
+    }
+    if (thiz.threadCheck)
+    {
+        ::pthread_join(thiz.threadCheck, nullptr);
+        thiz.threadCheck = nullptr;
     }
 
     std::vector<Connect*> connectLocal;
@@ -165,31 +217,11 @@ void Listen::Stop()
     for (Connect* connect : connectLocal)
     {
         connect->Stop();
-        delete connect;
     }
 }
 //------------------------------------------------------------------------------
 Connect* Listen::CreateConnect(int socket, const struct sockaddr_storage& addr)
 {
     return new Connect(socket, thiz.address, thiz.port, addr);
-}
-//------------------------------------------------------------------------------
-void Listen::AttachConnect(Connect* connect)
-{
-    thiz.connectMutex.lock();
-    thiz.connectArray.emplace_back(connect);
-    thiz.connectMutex.unlock();
-}
-//------------------------------------------------------------------------------
-void Listen::DetachConnect(Connect* connect)
-{
-    thiz.connectMutex.lock();
-    auto it = std::find(thiz.connectArray.begin(), thiz.connectArray.end(), connect);
-    if (it != thiz.connectArray.end())
-    {
-        (*it) = thiz.connectArray.back();
-        thiz.connectArray.pop_back();
-    }
-    thiz.connectMutex.unlock();
 }
 //------------------------------------------------------------------------------

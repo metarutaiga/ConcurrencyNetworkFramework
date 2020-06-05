@@ -17,14 +17,17 @@ class Listen
     int backlog;
     char* address;
     char* port;
-    pthread_t thread;
+    pthread_t threadListen;
+    pthread_t threadCheck;
 
     std::vector<Connect*> connectArray;
     std::mutex connectMutex;
 
 private:
-    virtual void Procedure();
-    static void* ProcedureThread(void* arg);
+    virtual void ProcedureListen();
+    virtual void ProcedureCheck();
+    static void* ProcedureListenThread(void* arg);
+    static void* ProcedureCheckThread(void* arg);
 
 public:
     Listen(const char* address, const char* port, int backlog = 128);
@@ -34,6 +37,4 @@ public:
     virtual void Stop();
 
     virtual Connect* CreateConnect(int socket, const struct sockaddr_storage& addr);
-    virtual void AttachConnect(Connect* connect);
-    virtual void DetachConnect(Connect* connect);
 };

@@ -8,6 +8,7 @@
 
 #include "FrameworkHeader.h"
 
+class Listen;
 class Connect
 {
     volatile bool terminate;
@@ -23,7 +24,7 @@ class Connect
     std::vector<std::vector<char>> sendBuffer;
     std::mutex sendBufferMutex;
     int sendBufferAvailable;
-    sem_t* sendBufferSemaphore;
+    sem_t sendBufferSemaphore;
 
 private:
     virtual void ProcedureRecv();
@@ -31,13 +32,18 @@ private:
     static void* ProcedureRecvThread(void* arg);
     static void* ProcedureSendThread(void* arg);
 
+private:
+    virtual ~Connect();
+
 public:
     Connect(int socket, const char* address, const char* port, const struct sockaddr_storage& addr);
     Connect(const char* address, const char* port);
-    virtual ~Connect();
 
     virtual bool Start();
     virtual void Stop();
+
+    virtual bool Alive();
+    virtual void Disconnect();
 
     virtual void Send(std::vector<char>&& buffer);
     virtual void Recv(const std::vector<char>& buffer) const;
