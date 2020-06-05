@@ -8,13 +8,16 @@
 
 #include <pthread.h>
 #include <semaphore.h>
-#include <sys/socket.h>
 
 #include <mutex>
 #include <vector>
 
 #if defined(HAVE_CONFIG_H)
 #   include "config.h"
+#endif
+
+#ifndef MSG_NOSIGNAL
+#   define MSG_NOSIGNAL 0
 #endif
 
 #ifndef MSG_MORE

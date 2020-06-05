@@ -17,7 +17,6 @@ class Listen
     int backlog;
     char* address;
     char* port;
-    struct addrinfo* addrinfo;
     pthread_t thread;
 
     std::vector<Connect*> connectArray;

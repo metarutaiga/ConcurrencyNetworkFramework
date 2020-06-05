@@ -13,7 +13,10 @@ class Connect
     volatile bool terminate;
 
     int socket;
-    struct sockaddr_storage addr;
+    char* sourceAddress;
+    char* sourcePort;
+    char* destinationAddress;
+    char* destinationPort;
     pthread_t threadRecv;
     pthread_t threadSend;
 
@@ -29,7 +32,8 @@ private:
     static void* ProcedureSendThread(void* arg);
 
 public:
-    Connect(int socket, const struct sockaddr_storage& addr);
+    Connect(int socket, const char* address, const char* port, const struct sockaddr_storage& addr);
+    Connect(const char* address, const char* port);
     virtual ~Connect();
 
     virtual bool Start();
@@ -37,4 +41,6 @@ public:
 
     virtual void Send(std::vector<char>&& buffer);
     virtual void Recv(const std::vector<char>& buffer) const;
+
+    static void GetAddressPort(const struct sockaddr_storage& addr, char*& address, char*& port);
 };
