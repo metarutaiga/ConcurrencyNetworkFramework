@@ -14,7 +14,7 @@
 #   define sem_destroy(s)       dispatch_release(*s)
 #   define sem_post(s)          dispatch_semaphore_signal(*s)
 #   define sem_wait(s)          dispatch_semaphore_wait(*s, DISPATCH_TIME_FOREVER)
-#   define sem_timedwait(s, a)  dispatch_semaphore_wait(*s, dispatch_time(DISPATCH_TIME_NOW, (*a).tv_sec * NSEC_PER_SEC + (*a).tv_nsec))
+#   define sem_timedwait(s, a)  dispatch_semaphore_wait(*s, dispatch_walltime(a, 0))
 #else
 #   include <semaphore.h>
 #endif

@@ -4,10 +4,11 @@
 // Copyright (c) 2020 TAiGA
 // https://github.com/metarutaiga/ConcurrencyNetworkFramework
 //==============================================================================
-#include <arpa/inet.h>
 #include <netdb.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 #include <netinet/tcp.h>
+#include <sys/time.h>
 #include "Listen.h"
 #include "Log.h"
 #include "Connect.h"
@@ -15,6 +16,7 @@
 #define CONNECT_LOG(level, format, ...) \
     Log::Format(level, "%s %d (%s:%s@%s:%s) : " format, "Connect", thiz.socket, thiz.sourceAddress, thiz.sourcePort, thiz.destinationAddress, thiz.destinationPort, __VA_ARGS__)
 
+int Connect::activeThreadCount;
 //------------------------------------------------------------------------------
 Connect::Connect(int socket, const char* address, const char* port, const struct sockaddr_storage& addr)
 {
@@ -129,8 +131,6 @@ void Connect::ProcedureRecv()
 {
     std::vector<char> buffer;
 
-    thiz.terminate = false;
-
     while (thiz.terminate == false)
     {
         unsigned short size = 0;
@@ -155,8 +155,6 @@ void Connect::ProcedureRecv()
 void Connect::ProcedureSend()
 {
     std::vector<char> buffer;
-
-    thiz.terminate = false;
 
     while (thiz.terminate == false)
     {
@@ -188,9 +186,11 @@ void Connect::ProcedureSend()
         }
 
 #if 1
+        struct timeval timeval;
+        gettimeofday(&timeval, nullptr);
         struct timespec timespec;
-        timespec.tv_sec = 10;
-        timespec.tv_nsec = 0;
+        timespec.tv_sec = timeval.tv_sec + 10;
+        timespec.tv_nsec = timeval.tv_usec * 1000;
         sem_timedwait(&thiz.sendBufferSemaphore, &timespec);
 #else
         sem_wait(&thiz.sendBufferSemaphore);
@@ -203,14 +203,18 @@ void Connect::ProcedureSend()
 void* Connect::ProcedureRecvThread(void* arg)
 {
     Connect& connect = *(Connect*)arg;
+    __atomic_add_fetch(&activeThreadCount, 1, __ATOMIC_ACQ_REL);
     connect.ProcedureRecv();
+    __atomic_sub_fetch(&activeThreadCount, 1, __ATOMIC_ACQ_REL);
     return nullptr;
 }
 //------------------------------------------------------------------------------
 void* Connect::ProcedureSendThread(void* arg)
 {
     Connect& connect = *(Connect*)arg;
+    __atomic_add_fetch(&activeThreadCount, 1, __ATOMIC_ACQ_REL);
     connect.ProcedureSend();
+    __atomic_sub_fetch(&activeThreadCount, 1, __ATOMIC_ACQ_REL);
     return nullptr;
 }
 //------------------------------------------------------------------------------
@@ -312,5 +316,10 @@ void Connect::GetAddressPort(const struct sockaddr_storage& addr, char*& address
         port = (char*)realloc(port, 8);
         snprintf(port, 8, "%u", ntohs(sa.sin6_port));
     }
+}
+//------------------------------------------------------------------------------
+int Connect::GetActiveThreadCount()
+{
+    return activeThreadCount;
 }
 //------------------------------------------------------------------------------

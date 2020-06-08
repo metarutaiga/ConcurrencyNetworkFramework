@@ -45,8 +45,6 @@ Listen::~Listen()
 //------------------------------------------------------------------------------
 void Listen::ProcedureListen()
 {
-    thiz.terminate = false;
-
     while (thiz.terminate == false)
     {
         struct sockaddr_storage addr = {};
@@ -86,8 +84,6 @@ void Listen::ProcedureListen()
 //------------------------------------------------------------------------------
 void Listen::ProcedureCheck()
 {
-    thiz.terminate = false;
-
     while (thiz.terminate == false)
     {
         struct timespec timespec;
@@ -102,12 +98,13 @@ void Listen::ProcedureCheck()
             size_t offset = rand() % count;
             if (thiz.connectArray.size() > offset)
             {
-                auto it = connectArray.begin() + offset;
+                auto it = thiz.connectArray.begin() + offset;
                 Connect* connect = (*it);
                 if (connect->Alive() == false)
                 {
                     connect->Stop();
-                    connectArray.erase(it);
+                    (*it) = thiz.connectArray.back();
+                    thiz.connectArray.pop_back();
                 }
             }
         }

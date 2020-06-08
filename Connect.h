@@ -26,6 +26,8 @@ class Connect
     int sendBufferAvailable;
     sem_t sendBufferSemaphore;
 
+    static int activeThreadCount;
+
 private:
     virtual void ProcedureRecv();
     virtual void ProcedureSend();
@@ -49,4 +51,5 @@ public:
     virtual void Recv(const std::vector<char>& buffer) const;
 
     static void GetAddressPort(const struct sockaddr_storage& addr, char*& address, char*& port);
+    static int GetActiveThreadCount();
 };
