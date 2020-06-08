@@ -6,7 +6,7 @@
 //==============================================================================
 #include "time.h"
 #include "Event.h"
-#include "Listen.h"
+#include "Listener.h"
 #include "Log.h"
 #include "Framework.h"
 
@@ -26,7 +26,7 @@ void Framework::Terminate()
     thiz.terminate = true;
 }
 //------------------------------------------------------------------------------
-void Framework::Server(Listen* server)
+void Framework::Server(Listener* server)
 {
     thiz.serverArray.emplace_back(server);
 }
@@ -44,7 +44,7 @@ int Framework::Dispatch()
     std::vector<Event*> eventLocal;
 
     Log::Format(0, "Framework : Start");
-    for (Listen* server : thiz.serverArray)
+    for (Listener* server : thiz.serverArray)
     {
         server->Start();
     }
@@ -82,7 +82,7 @@ int Framework::Dispatch()
     }
     Log::Format(0, "Framework : Shutdown");
 
-    for (Listen* server : thiz.serverArray)
+    for (Listener* server : thiz.serverArray)
     {
         server->Stop();
     }

@@ -8,15 +8,15 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include "Connect.h"
+#include "Connection.h"
 #include "Log.h"
-#include "Listen.h"
+#include "Listener.h"
 
 #define LISTEN_LOG(level, format, ...) \
     Log::Format(level, "%s %d (%s:%s) : " format, "Listen", thiz.socket, thiz.address, thiz.port, __VA_ARGS__)
 
 //------------------------------------------------------------------------------
-Listen::Listen(const char* address, const char* port, int backlog)
+Listener::Listener(const char* address, const char* port, int backlog)
 {
     thiz.terminate = false;
     thiz.socket = 0;
@@ -27,7 +27,7 @@ Listen::Listen(const char* address, const char* port, int backlog)
     thiz.threadCheck = nullptr;
 }
 //------------------------------------------------------------------------------
-Listen::~Listen()
+Listener::~Listener()
 {
     Stop();
 
@@ -43,8 +43,10 @@ Listen::~Listen()
     }
 }
 //------------------------------------------------------------------------------
-void Listen::ProcedureListen()
+void Listener::ProcedureListen()
 {
+    std::vector<Connection*> connectLocal;
+
     while (thiz.terminate == false)
     {
         struct sockaddr_storage addr = {};
@@ -57,24 +59,36 @@ void Listen::ProcedureListen()
         }
         char* address = nullptr;
         char* port = nullptr;
-        Connect::GetAddressPort(addr, address, port);
+        Connection::GetAddressPort(addr, address, port);
         LISTEN_LOG(0, "%s %d (%s:%s)", "accept", id, address, port);
         free(address);
         free(port);
 
-        Connect* connect = CreateConnect(id, addr);
+        Connection* connect = CreateConnection(id, addr);
         if (connect == nullptr)
         {
             ::close(id);
             continue;
         }
-        if (connect->Start() == false)
+        if (connect->Connect() == false)
         {
-            connect->Stop();
             connect->Disconnect();
             continue;
         }
+
+        connectLocal.clear();
         thiz.connectMutex.lock();
+        for (auto it = thiz.connectArray.begin(); it != thiz.connectArray.end(); ++it)
+        {
+            Connection* connect = (*it);
+            if (connect->Alive() == false)
+            {
+                connect->Disconnect();
+                continue;
+            }
+            connectLocal.emplace_back(connect);
+        }
+        thiz.connectArray.swap(connectLocal);
         thiz.connectArray.emplace_back(connect);
         thiz.connectMutex.unlock();
     }
@@ -82,53 +96,14 @@ void Listen::ProcedureListen()
     thiz.terminate = true;
 }
 //------------------------------------------------------------------------------
-void Listen::ProcedureCheck()
+void* Listener::ProcedureListenThread(void* arg)
 {
-    while (thiz.terminate == false)
-    {
-        struct timespec timespec;
-        timespec.tv_sec = 0;
-        timespec.tv_nsec = 1000 * 1000 * 1000 / 60;
-        nanosleep(&timespec, nullptr);
-
-        thiz.connectMutex.lock();
-        size_t count = thiz.connectArray.size();
-        if (count)
-        {
-            size_t offset = rand() % count;
-            if (thiz.connectArray.size() > offset)
-            {
-                auto it = thiz.connectArray.begin() + offset;
-                Connect* connect = (*it);
-                if (connect->Alive() == false)
-                {
-                    connect->Stop();
-                    (*it) = thiz.connectArray.back();
-                    thiz.connectArray.pop_back();
-                }
-            }
-        }
-        thiz.connectMutex.unlock();
-    }
-
-    thiz.terminate = true;
-}
-//------------------------------------------------------------------------------
-void* Listen::ProcedureListenThread(void* arg)
-{
-    Listen& listen = *(Listen*)arg;
+    Listener& listen = *(Listener*)arg;
     listen.ProcedureListen();
     return nullptr;
 }
 //------------------------------------------------------------------------------
-void* Listen::ProcedureCheckThread(void* arg)
-{
-    Listen& listen = *(Listen*)arg;
-    listen.ProcedureCheck();
-    return nullptr;
-}
-//------------------------------------------------------------------------------
-bool Listen::Start()
+bool Listener::Start()
 {
     struct addrinfo* addrinfo = nullptr;
     struct addrinfo hints = {};
@@ -176,8 +151,9 @@ bool Listen::Start()
     ::pthread_attr_setstacksize(&attr, 65536);
 
     ::pthread_create(&thiz.threadListen, &attr, ProcedureListenThread, this);
-    ::pthread_create(&thiz.threadCheck, &attr, ProcedureCheckThread, this);
-    if (thiz.threadListen == nullptr || thiz.threadCheck == nullptr)
+
+    ::pthread_attr_destroy(&attr);
+    if (thiz.threadListen == nullptr)
     {
         LISTEN_LOG(-1, "%s %s", "thread", strerror(errno));
         return false;
@@ -187,7 +163,7 @@ bool Listen::Start()
     return true;
 }
 //------------------------------------------------------------------------------
-void Listen::Stop()
+void Listener::Stop()
 {
     thiz.terminate = true;
 
@@ -201,24 +177,19 @@ void Listen::Stop()
         ::pthread_join(thiz.threadListen, nullptr);
         thiz.threadListen = nullptr;
     }
-    if (thiz.threadCheck)
-    {
-        ::pthread_join(thiz.threadCheck, nullptr);
-        thiz.threadCheck = nullptr;
-    }
 
-    std::vector<Connect*> connectLocal;
+    std::vector<Connection*> connectLocal;
     thiz.connectMutex.lock();
     thiz.connectArray.swap(connectLocal);
     thiz.connectMutex.unlock();
-    for (Connect* connect : connectLocal)
+    for (Connection* connect : connectLocal)
     {
-        connect->Stop();
+        connect->Disconnect();
     }
 }
 //------------------------------------------------------------------------------
-Connect* Listen::CreateConnect(int socket, const struct sockaddr_storage& addr)
+Connection* Listener::CreateConnection(int socket, const struct sockaddr_storage& addr)
 {
-    return new Connect(socket, thiz.address, thiz.port, addr);
+    return new Connection(socket, thiz.address, thiz.port, addr);
 }
 //------------------------------------------------------------------------------

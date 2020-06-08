@@ -9,12 +9,12 @@
 #include "FrameworkHeader.h"
 
 class Event;
-class Listen;
+class Listener;
 class Framework
 {
     volatile bool terminate;
 
-    std::vector<Listen*> serverArray;
+    std::vector<Listener*> serverArray;
 
     std::vector<Event*> eventArray;
     std::mutex eventMutex;
@@ -25,7 +25,7 @@ public:
 
     virtual void Terminate();
 
-    virtual void Server(Listen* server);
+    virtual void Server(Listener* server);
 
     virtual void Push(Event* event);
 

@@ -8,8 +8,8 @@
 
 #include "FrameworkHeader.h"
 
-class Listen;
-class Connect
+class Listener;
+class Connection
 {
     volatile bool terminate;
 
@@ -23,7 +23,6 @@ class Connect
 
     std::vector<std::vector<char>> sendBuffer;
     std::mutex sendBufferMutex;
-    int sendBufferAvailable;
     sem_t sendBufferSemaphore;
 
     static int activeThreadCount;
@@ -35,15 +34,13 @@ private:
     static void* ProcedureSendThread(void* arg);
 
 private:
-    virtual ~Connect();
+    virtual ~Connection();
 
 public:
-    Connect(int socket, const char* address, const char* port, const struct sockaddr_storage& addr);
-    Connect(const char* address, const char* port);
+    Connection(int socket, const char* address, const char* port, const struct sockaddr_storage& addr);
+    Connection(const char* address, const char* port);
 
-    virtual bool Start();
-    virtual void Stop();
-
+    virtual bool Connect();
     virtual bool Alive();
     virtual void Disconnect();
 

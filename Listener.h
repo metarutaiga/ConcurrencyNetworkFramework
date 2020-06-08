@@ -8,8 +8,8 @@
 
 #include "FrameworkHeader.h"
 
-class Connect;
-class Listen
+class Connection;
+class Listener
 {
     volatile bool terminate;
 
@@ -20,21 +20,19 @@ class Listen
     pthread_t threadListen;
     pthread_t threadCheck;
 
-    std::vector<Connect*> connectArray;
+    std::vector<Connection*> connectArray;
     std::mutex connectMutex;
 
 private:
     virtual void ProcedureListen();
-    virtual void ProcedureCheck();
     static void* ProcedureListenThread(void* arg);
-    static void* ProcedureCheckThread(void* arg);
 
 public:
-    Listen(const char* address, const char* port, int backlog = 128);
-    virtual ~Listen();
+    Listener(const char* address, const char* port, int backlog = 128);
+    virtual ~Listener();
 
     virtual bool Start();
     virtual void Stop();
 
-    virtual Connect* CreateConnect(int socket, const struct sockaddr_storage& addr);
+    virtual Connection* CreateConnection(int socket, const struct sockaddr_storage& addr);
 };
