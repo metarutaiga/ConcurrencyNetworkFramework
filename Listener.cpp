@@ -24,7 +24,6 @@ Listener::Listener(const char* address, const char* port, int backlog)
     thiz.address = address ? strdup(address) : nullptr;
     thiz.port = port ? strdup(port) : strdup("7777");
     thiz.threadListen = nullptr;
-    thiz.threadCheck = nullptr;
 }
 //------------------------------------------------------------------------------
 Listener::~Listener()

@@ -11,6 +11,7 @@
 class Listener;
 class Connection
 {
+protected:
     volatile bool terminate;
 
     int socket;
@@ -27,13 +28,13 @@ class Connection
 
     static int activeThreadCount;
 
-private:
+protected:
     virtual void ProcedureRecv();
     virtual void ProcedureSend();
     static void* ProcedureRecvThread(void* arg);
     static void* ProcedureSendThread(void* arg);
 
-private:
+protected:
     virtual ~Connection();
 
 public:
@@ -45,7 +46,7 @@ public:
     virtual void Disconnect();
 
     virtual void Send(std::vector<char>&& buffer);
-    virtual void Recv(const std::vector<char>& buffer) const;
+    virtual void Recv(const std::vector<char>& buffer);
 
     static void GetAddressPort(const struct sockaddr_storage& addr, char*& address, char*& port);
     static int GetActiveThreadCount();

@@ -11,6 +11,7 @@
 class Connection;
 class Listener
 {
+protected:
     volatile bool terminate;
 
     int socket;
@@ -18,12 +19,11 @@ class Listener
     char* address;
     char* port;
     pthread_t threadListen;
-    pthread_t threadCheck;
 
     std::vector<Connection*> connectArray;
     std::mutex connectMutex;
 
-private:
+protected:
     virtual void ProcedureListen();
     static void* ProcedureListenThread(void* arg);
 

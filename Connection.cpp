@@ -303,7 +303,7 @@ void Connection::Send(std::vector<char>&& buffer)
     }
 }
 //------------------------------------------------------------------------------
-void Connection::Recv(const std::vector<char>& buffer) const
+void Connection::Recv(const std::vector<char>& buffer)
 {
     CONNECT_LOG(0, "%s %zd", "recv", buffer.size());
 }
