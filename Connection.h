@@ -1,5 +1,5 @@
 //==============================================================================
-// ConcurrencyNetworkFramework : Connect Header
+// ConcurrencyNetworkFramework : Connection Header
 //
 // Copyright (c) 2020 TAiGA
 // https://github.com/metarutaiga/ConcurrencyNetworkFramework

@@ -1,5 +1,5 @@
 //==============================================================================
-// ConcurrencyNetworkFramework : Listen Source
+// ConcurrencyNetworkFramework : Listener Source
 //
 // Copyright (c) 2020 TAiGA
 // https://github.com/metarutaiga/ConcurrencyNetworkFramework

@@ -1,5 +1,5 @@
 //==============================================================================
-// ConcurrencyNetworkFramework : Connect Source
+// ConcurrencyNetworkFramework : Connection Source
 //
 // Copyright (c) 2020 TAiGA
 // https://github.com/metarutaiga/ConcurrencyNetworkFramework
@@ -18,7 +18,7 @@
 #define CONNECT_LOG(level, format, ...) \
     Log::Format(level, "%s %d (%s:%s@%s:%s) : " format, "Connect", thiz.socket, thiz.sourceAddress, thiz.sourcePort, thiz.destinationAddress, thiz.destinationPort, __VA_ARGS__)
 
-int Connection::activeThreadCount;
+int Connection::activeThreadCount = 0;
 //------------------------------------------------------------------------------
 Connection::Connection(int socket, const char* address, const char* port, const struct sockaddr_storage& addr)
 {
