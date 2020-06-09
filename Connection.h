@@ -8,6 +8,8 @@
 
 #include "FrameworkHeader.h"
 
+typedef std::shared_ptr<std::vector<char>> BufferPtr;
+
 class Listener;
 class Connection
 {
@@ -22,7 +24,7 @@ protected:
     pthread_t threadRecv;
     pthread_t threadSend;
 
-    std::vector<std::vector<char>> sendBuffer;
+    std::vector<BufferPtr> sendBuffer;
     std::mutex sendBufferMutex;
     sem_t sendBufferSemaphore;
 
@@ -31,8 +33,6 @@ protected:
 protected:
     virtual void ProcedureRecv();
     virtual void ProcedureSend();
-    static void* ProcedureRecvThread(void* arg);
-    static void* ProcedureSendThread(void* arg);
 
 protected:
     virtual ~Connection();
@@ -45,8 +45,8 @@ public:
     virtual bool Alive();
     virtual void Disconnect();
 
-    virtual void Send(std::vector<char>&& buffer);
-    virtual void Recv(const std::vector<char>& buffer);
+    virtual void Send(const BufferPtr& bufferPtr);
+    virtual void Recv(const BufferPtr::element_type& buffer);
 
     static void GetAddressPort(const struct sockaddr_storage& addr, char*& address, char*& port);
     static int GetActiveThreadCount();

@@ -100,8 +100,7 @@ Connection::~Connection()
 
     if (thiz.socket > 0)
     {
-        ::close(thiz.socket);
-        thiz.socket = 0;
+        ::shutdown(thiz.socket, SHUT_RD);
     }
     if (thiz.sendBufferSemaphore)
     {
@@ -129,6 +128,11 @@ Connection::~Connection()
     {
         ::pthread_join(thiz.threadSend, nullptr);
         thiz.threadSend = nullptr;
+    }
+    if (thiz.socket > 0)
+    {
+        ::close(thiz.socket);
+        thiz.socket = 0;
     }
     if (thiz.sendBufferSemaphore)
     {
@@ -159,7 +163,9 @@ Connection::~Connection()
 //------------------------------------------------------------------------------
 void Connection::ProcedureRecv()
 {
-    std::vector<char> buffer;
+    __atomic_add_fetch(&activeThreadCount, 1, __ATOMIC_ACQ_REL);
+
+    BufferPtr::element_type buffer;
 
     while (thiz.terminate == false)
     {
@@ -180,34 +186,40 @@ void Connection::ProcedureRecv()
     }
 
     thiz.terminate = true;
+
+    __atomic_sub_fetch(&activeThreadCount, 1, __ATOMIC_ACQ_REL);
 }
 //------------------------------------------------------------------------------
 void Connection::ProcedureSend()
 {
-    std::vector<char> buffer;
+    __atomic_add_fetch(&activeThreadCount, 1, __ATOMIC_ACQ_REL);
 
     while (thiz.terminate == false)
     {
-        buffer.clear();
+        BufferPtr bufferPtr;
         thiz.sendBufferMutex.lock();
         if (thiz.sendBuffer.empty() == false)
         {
-            thiz.sendBuffer.front().swap(buffer);
+            thiz.sendBuffer.front().swap(bufferPtr);
             thiz.sendBuffer.erase(thiz.sendBuffer.begin());
         }
         thiz.sendBufferMutex.unlock();
-        if (buffer.empty() == false)
+        if (bufferPtr.get())
         {
-            unsigned short size = (short)buffer.size();
-            if (::send(thiz.socket, &size, sizeof(short), MSG_WAITALL | MSG_NOSIGNAL | MSG_MORE) <= 0)
+            const auto& buffer = (*bufferPtr.get());
+            if (buffer.empty() == false && buffer.size() <= USHRT_MAX)
             {
-                CONNECT_LOG(-1, "%s %s", "send", strerror(errno));
-                break;
-            }
-            if (::send(thiz.socket, &buffer.front(), size, MSG_WAITALL | MSG_NOSIGNAL) <= 0)
-            {
-                CONNECT_LOG(-1, "%s %s", "send", strerror(errno));
-                break;
+                unsigned short size = (short)buffer.size();
+                if (::send(thiz.socket, &size, sizeof(short), MSG_WAITALL | MSG_NOSIGNAL | MSG_MORE) <= 0)
+                {
+                    CONNECT_LOG(-1, "%s %s", "send", strerror(errno));
+                    break;
+                }
+                if (::send(thiz.socket, &buffer.front(), size, MSG_WAITALL | MSG_NOSIGNAL) <= 0)
+                {
+                    CONNECT_LOG(-1, "%s %s", "send", strerror(errno));
+                    break;
+                }
             }
         }
 
@@ -224,24 +236,8 @@ void Connection::ProcedureSend()
     }
 
     thiz.terminate = true;
-}
-//------------------------------------------------------------------------------
-void* Connection::ProcedureRecvThread(void* arg)
-{
-    Connection& connect = *(Connection*)arg;
-    __atomic_add_fetch(&activeThreadCount, 1, __ATOMIC_ACQ_REL);
-    connect.ProcedureRecv();
+
     __atomic_sub_fetch(&activeThreadCount, 1, __ATOMIC_ACQ_REL);
-    return nullptr;
-}
-//------------------------------------------------------------------------------
-void* Connection::ProcedureSendThread(void* arg)
-{
-    Connection& connect = *(Connection*)arg;
-    __atomic_add_fetch(&activeThreadCount, 1, __ATOMIC_ACQ_REL);
-    connect.ProcedureSend();
-    __atomic_sub_fetch(&activeThreadCount, 1, __ATOMIC_ACQ_REL);
-    return nullptr;
 }
 //------------------------------------------------------------------------------
 bool Connection::Connect()
@@ -259,8 +255,18 @@ bool Connection::Connect()
     ::pthread_attr_init(&attr);
     ::pthread_attr_setstacksize(&attr, 65536);
 
-    ::pthread_create(&thiz.threadRecv, &attr, ProcedureRecvThread, this);
-    ::pthread_create(&thiz.threadSend, &attr, ProcedureSendThread, this);
+    ::pthread_create(&thiz.threadRecv, &attr, [](void* arg) -> void*
+    {
+        Connection& connect = *(Connection*)arg;
+        connect.ProcedureRecv();
+        return nullptr;
+    }, this);
+    ::pthread_create(&thiz.threadSend, &attr, [](void* arg) -> void*
+    {
+        Connection& connect = *(Connection*)arg;
+        connect.ProcedureSend();
+        return nullptr;
+    }, this);
 
     ::pthread_attr_destroy(&attr);
     if (thiz.threadRecv == nullptr || thiz.threadSend == nullptr)
@@ -286,15 +292,20 @@ void Connection::Disconnect()
     ::pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
     pthread_t thread = nullptr;
-    ::pthread_create(&thread, &attr, [](void* arg) -> void* { delete (Connection*)arg; return nullptr; }, this);
+    ::pthread_create(&thread, &attr, [](void* arg) -> void*
+    {
+        Connection& connect = *(Connection*)arg;
+        delete &connect;
+        return nullptr;
+    }, this);
 
     ::pthread_attr_destroy(&attr);
 }
 //------------------------------------------------------------------------------
-void Connection::Send(std::vector<char>&& buffer)
+void Connection::Send(const BufferPtr& bufferPtr)
 {
     thiz.sendBufferMutex.lock();
-    thiz.sendBuffer.emplace_back(buffer);
+    thiz.sendBuffer.emplace_back(bufferPtr);
     thiz.sendBufferMutex.unlock();
 
     if (sem_post(&thiz.sendBufferSemaphore) < 0)
@@ -303,7 +314,7 @@ void Connection::Send(std::vector<char>&& buffer)
     }
 }
 //------------------------------------------------------------------------------
-void Connection::Recv(const std::vector<char>& buffer)
+void Connection::Recv(const BufferPtr::element_type& buffer)
 {
     CONNECT_LOG(0, "%s %zd", "recv", buffer.size());
 }

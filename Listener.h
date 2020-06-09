@@ -20,12 +20,11 @@ protected:
     char* port;
     pthread_t threadListen;
 
-    std::vector<Connection*> connectArray;
-    std::mutex connectMutex;
+    std::vector<Connection*> connectionArray;
+    std::mutex connectionMutex;
 
 protected:
     virtual void ProcedureListen();
-    static void* ProcedureListenThread(void* arg);
 
 public:
     Listener(const char* address, const char* port, int backlog = 128);

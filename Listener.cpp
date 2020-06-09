@@ -24,6 +24,8 @@ Listener::Listener(const char* address, const char* port, int backlog)
     thiz.address = address ? strdup(address) : nullptr;
     thiz.port = port ? strdup(port) : strdup("7777");
     thiz.threadListen = nullptr;
+
+    signal(SIGPIPE, SIG_IGN);
 }
 //------------------------------------------------------------------------------
 Listener::~Listener()
@@ -44,7 +46,7 @@ Listener::~Listener()
 //------------------------------------------------------------------------------
 void Listener::ProcedureListen()
 {
-    std::vector<Connection*> connectLocal;
+    std::vector<Connection*> connectionLocal;
 
     while (thiz.terminate == false)
     {
@@ -63,43 +65,36 @@ void Listener::ProcedureListen()
         free(address);
         free(port);
 
-        Connection* connect = CreateConnection(id, addr);
-        if (connect == nullptr)
+        Connection* connection = CreateConnection(id, addr);
+        if (connection == nullptr)
         {
             ::close(id);
             continue;
         }
-        if (connect->Connect() == false)
+        if (connection->Connect() == false)
         {
-            connect->Disconnect();
+            connection->Disconnect();
             continue;
         }
 
-        connectLocal.clear();
-        thiz.connectMutex.lock();
-        for (auto it = thiz.connectArray.begin(); it != thiz.connectArray.end(); ++it)
+        connectionLocal.clear();
+        thiz.connectionMutex.lock();
+        for (auto it = thiz.connectionArray.begin(); it != thiz.connectionArray.end(); ++it)
         {
-            Connection* connect = (*it);
-            if (connect->Alive() == false)
+            Connection* connection = (*it);
+            if (connection->Alive() == false)
             {
-                connect->Disconnect();
+                connection->Disconnect();
                 continue;
             }
-            connectLocal.emplace_back(connect);
+            connectionLocal.emplace_back(connection);
         }
-        thiz.connectArray.swap(connectLocal);
-        thiz.connectArray.emplace_back(connect);
-        thiz.connectMutex.unlock();
+        thiz.connectionArray.swap(connectionLocal);
+        thiz.connectionArray.emplace_back(connection);
+        thiz.connectionMutex.unlock();
     }
 
     thiz.terminate = true;
-}
-//------------------------------------------------------------------------------
-void* Listener::ProcedureListenThread(void* arg)
-{
-    Listener& listen = *(Listener*)arg;
-    listen.ProcedureListen();
-    return nullptr;
 }
 //------------------------------------------------------------------------------
 bool Listener::Start()
@@ -149,7 +144,12 @@ bool Listener::Start()
     ::pthread_attr_init(&attr);
     ::pthread_attr_setstacksize(&attr, 65536);
 
-    ::pthread_create(&thiz.threadListen, &attr, ProcedureListenThread, this);
+    ::pthread_create(&thiz.threadListen, &attr, [](void* arg) -> void*
+    {
+        Listener& listen = *(Listener*)arg;
+        listen.ProcedureListen();
+        return nullptr;
+    }, this);
 
     ::pthread_attr_destroy(&attr);
     if (thiz.threadListen == nullptr)
@@ -177,13 +177,13 @@ void Listener::Stop()
         thiz.threadListen = nullptr;
     }
 
-    std::vector<Connection*> connectLocal;
-    thiz.connectMutex.lock();
-    thiz.connectArray.swap(connectLocal);
-    thiz.connectMutex.unlock();
-    for (Connection* connect : connectLocal)
+    std::vector<Connection*> connectionLocal;
+    thiz.connectionMutex.lock();
+    thiz.connectionArray.swap(connectionLocal);
+    thiz.connectionMutex.unlock();
+    for (Connection* connection : connectionLocal)
     {
-        connect->Disconnect();
+        connection->Disconnect();
     }
 }
 //------------------------------------------------------------------------------
