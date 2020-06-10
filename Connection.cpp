@@ -28,8 +28,8 @@ Connection::Connection(int socket, const char* address, const char* port, const 
     thiz.sourcePort = port ? strdup(port) : nullptr;
     thiz.destinationAddress = nullptr;
     thiz.destinationPort = nullptr;
-    thiz.threadRecv = nullptr;
-    thiz.threadSend = nullptr;
+    thiz.threadRecv = pthread_t();
+    thiz.threadSend = pthread_t();
     thiz.sendBufferSemaphore = sem_t();
     sem_init(&thiz.sendBufferSemaphore, 0, 0);
     if (thiz.sendBufferSemaphore == sem_t())
@@ -48,8 +48,8 @@ Connection::Connection(const char* address, const char* port)
     thiz.sourcePort = nullptr;
     thiz.destinationAddress = address ? strdup(address) : nullptr;
     thiz.destinationPort = port ? strdup(port) : nullptr;
-    thiz.threadRecv = nullptr;
-    thiz.threadSend = nullptr;
+    thiz.threadRecv = pthread_t();
+    thiz.threadSend = pthread_t();
     thiz.sendBufferSemaphore = sem_t();
     sem_init(&thiz.sendBufferSemaphore, 0, 0);
     if (thiz.sendBufferSemaphore == sem_t())
@@ -122,12 +122,12 @@ Connection::~Connection()
     if (thiz.threadRecv)
     {
         ::pthread_join(thiz.threadRecv, nullptr);
-        thiz.threadRecv = nullptr;
+        thiz.threadRecv = pthread_t();
     }
     if (thiz.threadSend)
     {
         ::pthread_join(thiz.threadSend, nullptr);
-        thiz.threadSend = nullptr;
+        thiz.threadSend = pthread_t();
     }
     if (thiz.socket > 0)
     {
@@ -318,7 +318,7 @@ bool Connection::Connect()
     }, this);
 
     ::pthread_attr_destroy(&attr);
-    if (thiz.threadRecv == nullptr || thiz.threadSend == nullptr)
+    if (thiz.threadRecv == pthread_t() || thiz.threadSend == pthread_t())
     {
         CONNECT_LOG(-1, "%s %s", "thread", strerror(errno));
         return false;
@@ -340,7 +340,7 @@ void Connection::Disconnect()
     ::pthread_attr_setstacksize(&attr, 65536);
     ::pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
-    pthread_t thread = nullptr;
+    pthread_t thread = pthread_t();
     ::pthread_create(&thread, &attr, [](void* arg) -> void*
     {
         Connection& connect = *(Connection*)arg;

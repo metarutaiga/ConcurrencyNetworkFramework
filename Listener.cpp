@@ -23,7 +23,7 @@ Listener::Listener(const char* address, const char* port, int backlog)
     thiz.backlog = backlog;
     thiz.address = address ? strdup(address) : nullptr;
     thiz.port = port ? strdup(port) : strdup("7777");
-    thiz.threadListen = nullptr;
+    thiz.threadListen = pthread_t();
 
     signal(SIGPIPE, SIG_IGN);
 }
@@ -168,7 +168,7 @@ bool Listener::Start()
     }, this);
 
     ::pthread_attr_destroy(&attr);
-    if (thiz.threadListen == nullptr)
+    if (thiz.threadListen == pthread_t())
     {
         LISTEN_LOG(-1, "%s %s", "thread", strerror(errno));
         return false;
@@ -184,13 +184,17 @@ void Listener::Stop()
 
     if (thiz.socket > 0)
     {
-        ::close(thiz.socket);
-        thiz.socket = 0;
+        ::shutdown(thiz.socket, SHUT_RD);
     }
     if (thiz.threadListen)
     {
         ::pthread_join(thiz.threadListen, nullptr);
-        thiz.threadListen = nullptr;
+        thiz.threadListen = pthread_t();
+    }
+    if (thiz.socket > 0)
+    {
+        ::close(thiz.socket);
+        thiz.socket = 0;
     }
 
     std::vector<Connection*> connectionLocal;
