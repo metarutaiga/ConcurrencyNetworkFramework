@@ -28,7 +28,7 @@ protected:
     std::mutex sendBufferMutex;
     sem_t sendBufferSemaphore;
 
-    static int activeThreadCount;
+    static std::atomic_uint activeThreadCount;
 
 protected:
     virtual void ProcedureRecv();
@@ -49,5 +49,5 @@ public:
     virtual void Recv(const BufferPtr::element_type& buffer);
 
     static void GetAddressPort(const struct sockaddr_storage& addr, char*& address, char*& port);
-    static int GetActiveThreadCount();
+    static unsigned int GetActiveThreadCount();
 };

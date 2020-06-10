@@ -18,7 +18,7 @@
 #define CONNECT_LOG(level, format, ...) \
     Log::Format(level, "%s %d (%s:%s@%s:%s) : " format, "Connect", thiz.socket, thiz.sourceAddress, thiz.sourcePort, thiz.destinationAddress, thiz.destinationPort, __VA_ARGS__)
 
-int Connection::activeThreadCount = 0;
+std::atomic_uint Connection::activeThreadCount;
 //------------------------------------------------------------------------------
 Connection::Connection(int socket, const char* address, const char* port, const struct sockaddr_storage& addr)
 {
@@ -163,36 +163,75 @@ Connection::~Connection()
 //------------------------------------------------------------------------------
 void Connection::ProcedureRecv()
 {
-    __atomic_add_fetch(&activeThreadCount, 1, __ATOMIC_ACQ_REL);
+    Connection::activeThreadCount.fetch_add(1, std::memory_order_acq_rel);
 
     BufferPtr::element_type buffer;
 
-    while (thiz.terminate == false)
+    auto recv = [this](int socket, void* buffer, size_t bufferSize, int flags)
     {
-        unsigned short size = 0;
-        if (::recv(thiz.socket, &size, sizeof(short), MSG_WAITALL | MSG_NOSIGNAL) <= 0)
+        ssize_t result = 0;
+        while (thiz.terminate == false)
         {
-            CONNECT_LOG(-1, "%s %s", "recv", strerror(errno));
+            result = ::recv(socket, buffer, bufferSize, flags);
+            if (result >= 0)
+                break;
+            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+                continue;
             break;
         }
-        buffer.resize(size);
-        if (::recv(thiz.socket, &buffer.front(), size, MSG_WAITALL | MSG_NOSIGNAL) <= 0)
+        return result;
+    };
+
+    while (thiz.terminate == false)
+    {
+        // Length
+        unsigned short size = 0;
+        if (recv(thiz.socket, &size, sizeof(short), MSG_WAITALL | MSG_NOSIGNAL) <= 0)
         {
             CONNECT_LOG(-1, "%s %s", "recv", strerror(errno));
             break;
         }
 
+        // Preserve
+        if (size == 0)
+        {
+            CONNECT_LOG(-1, "%s %s", "recv", "empty");
+            continue;
+        }
+
+        // Data
+        buffer.resize(size);
+        if (recv(thiz.socket, &buffer.front(), size, MSG_WAITALL | MSG_NOSIGNAL) <= 0)
+        {
+            CONNECT_LOG(-1, "%s %s", "recv", strerror(errno));
+            break;
+        }
         Recv(buffer);
     }
 
     thiz.terminate = true;
 
-    __atomic_sub_fetch(&activeThreadCount, 1, __ATOMIC_ACQ_REL);
+    Connection::activeThreadCount.fetch_sub(1, std::memory_order_acq_rel);
 }
 //------------------------------------------------------------------------------
 void Connection::ProcedureSend()
 {
-    __atomic_add_fetch(&activeThreadCount, 1, __ATOMIC_ACQ_REL);
+    Connection::activeThreadCount.fetch_add(1, std::memory_order_acq_rel);
+
+    auto send = [this](int socket, const void* buffer, size_t bufferSize, int flags)
+    {
+        ssize_t result = 0;
+        while (thiz.terminate == false)
+        {
+            result = ::send(socket, buffer, bufferSize, flags);
+            if (result >= 0)
+                break;
+            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+                continue;
+            break;
+        }
+        return result;
+    };
 
     while (thiz.terminate == false)
     {
@@ -207,15 +246,25 @@ void Connection::ProcedureSend()
         if (bufferPtr.get())
         {
             const auto& buffer = (*bufferPtr.get());
-            if (buffer.empty() == false && buffer.size() <= USHRT_MAX)
+            if (buffer.size() <= USHRT_MAX)
             {
+                // Length
                 unsigned short size = (short)buffer.size();
-                if (::send(thiz.socket, &size, sizeof(short), MSG_WAITALL | MSG_NOSIGNAL | MSG_MORE) <= 0)
+                if (send(thiz.socket, &size, sizeof(short), MSG_WAITALL | MSG_NOSIGNAL | MSG_MORE) <= 0)
                 {
                     CONNECT_LOG(-1, "%s %s", "send", strerror(errno));
                     break;
                 }
-                if (::send(thiz.socket, &buffer.front(), size, MSG_WAITALL | MSG_NOSIGNAL) <= 0)
+
+                // Preserve
+                if (size == 0)
+                {
+                    CONNECT_LOG(-1, "%s %s", "send", "empty");
+                    continue;
+                }
+
+                // Data
+                if (send(thiz.socket, &buffer.front(), size, MSG_WAITALL | MSG_NOSIGNAL) <= 0)
                 {
                     CONNECT_LOG(-1, "%s %s", "send", strerror(errno));
                     break;
@@ -237,7 +286,7 @@ void Connection::ProcedureSend()
 
     thiz.terminate = true;
 
-    __atomic_sub_fetch(&activeThreadCount, 1, __ATOMIC_ACQ_REL);
+    Connection::activeThreadCount.fetch_sub(1, std::memory_order_acq_rel);
 }
 //------------------------------------------------------------------------------
 bool Connection::Connect()
@@ -343,8 +392,8 @@ void Connection::GetAddressPort(const struct sockaddr_storage& addr, char*& addr
     }
 }
 //------------------------------------------------------------------------------
-int Connection::GetActiveThreadCount()
+unsigned int Connection::GetActiveThreadCount()
 {
-    return activeThreadCount;
+    return Connection::activeThreadCount;
 }
 //------------------------------------------------------------------------------

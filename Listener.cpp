@@ -48,11 +48,26 @@ void Listener::ProcedureListen()
 {
     std::vector<Connection*> connectionLocal;
 
+    auto accept = [this](int socket, struct sockaddr* addr, socklen_t* size)
+    {
+        int result = 0;
+        while (thiz.terminate == false)
+        {
+            result = ::accept(socket, addr, size);
+            if (result >= 0)
+                break;
+            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+                continue;
+            break;
+        }
+        return result;
+    };
+
     while (thiz.terminate == false)
     {
         struct sockaddr_storage addr = {};
         socklen_t size = sizeof(addr);
-        int id = ::accept(thiz.socket, (struct sockaddr*)&addr, &size);
+        int id = accept(thiz.socket, (struct sockaddr*)&addr, &size);
         if (id <= 0)
         {
             LISTEN_LOG(-1, "%s %s", "accept", strerror(errno));
@@ -79,9 +94,10 @@ void Listener::ProcedureListen()
 
         connectionLocal.clear();
         thiz.connectionMutex.lock();
-        for (auto it = thiz.connectionArray.begin(); it != thiz.connectionArray.end(); ++it)
+        for (Connection* connection : thiz.connectionArray)
         {
-            Connection* connection = (*it);
+            if (connection == nullptr)
+                continue;
             if (connection->Alive() == false)
             {
                 connection->Disconnect();
@@ -183,6 +199,8 @@ void Listener::Stop()
     thiz.connectionMutex.unlock();
     for (Connection* connection : connectionLocal)
     {
+        if (connection == nullptr)
+            continue;
         connection->Disconnect();
     }
 }
