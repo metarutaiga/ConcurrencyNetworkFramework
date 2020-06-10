@@ -243,9 +243,9 @@ void Connection::ProcedureSend()
             thiz.sendBuffer.erase(thiz.sendBuffer.begin());
         }
         thiz.sendBufferMutex.unlock();
-        if (bufferPtr.get())
+        if (bufferPtr)
         {
-            const auto& buffer = (*bufferPtr.get());
+            const auto& buffer = (*bufferPtr);
             if (buffer.size() <= USHRT_MAX)
             {
                 // Length
