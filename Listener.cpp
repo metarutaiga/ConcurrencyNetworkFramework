@@ -57,7 +57,13 @@ void Listener::ProcedureListen()
             if (result >= 0)
                 break;
             if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+            {
+                struct timespec timespec;
+                timespec.tv_sec = 0;
+                timespec.tv_nsec = 1000 * 1000 * 1000 / 60;
+                nanosleep(&timespec, nullptr);
                 continue;
+            }
             break;
         }
         return result;
@@ -149,6 +155,11 @@ bool Listener::Start()
 
     int fastOpen = 5;
     ::setsockopt(thiz.socket, SOL_TCP, TCP_FASTOPEN, &fastOpen, sizeof(fastOpen));
+
+#if defined(__APPLE__)
+    // accept can't cancel on macOS
+    fcntl(thiz.socket, F_SETFL, O_NONBLOCK);
+#endif
 
     if (::listen(thiz.socket, thiz.backlog) != 0)
     {

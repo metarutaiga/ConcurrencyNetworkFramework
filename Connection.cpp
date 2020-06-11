@@ -176,7 +176,13 @@ void Connection::ProcedureRecv()
             if (result >= 0)
                 break;
             if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+            {
+                struct timespec timespec;
+                timespec.tv_sec = 0;
+                timespec.tv_nsec = 1000 * 1000 * 1000 / 60;
+                nanosleep(&timespec, nullptr);
                 continue;
+            }
             break;
         }
         return result;
@@ -227,7 +233,13 @@ void Connection::ProcedureSend()
             if (result >= 0)
                 break;
             if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+            {
+                struct timespec timespec;
+                timespec.tv_sec = 0;
+                timespec.tv_nsec = 1000 * 1000 * 1000 / 60;
+                nanosleep(&timespec, nullptr);
                 continue;
+            }
             break;
         }
         return result;
