@@ -52,4 +52,6 @@
 #   define SOL_TCP IPPROTO_TCP
 #endif
 
-#define thiz (*this)
+#ifndef thiz
+#   define thiz (*this)
+#endif
