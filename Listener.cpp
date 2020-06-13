@@ -24,8 +24,9 @@ Listener::Listener(const char* address, const char* port, int backlog)
     thiz.address = address ? strdup(address) : nullptr;
     thiz.port = port ? strdup(port) : strdup("7777");
     thiz.threadListen = pthread_t();
-
+#if defined(__APPLE__)
     signal(SIGPIPE, SIG_IGN);
+#endif
 }
 //------------------------------------------------------------------------------
 Listener::~Listener()
@@ -156,11 +157,6 @@ bool Listener::Start()
     int fastOpen = 5;
     ::setsockopt(thiz.socket, SOL_TCP, TCP_FASTOPEN, &fastOpen, sizeof(fastOpen));
 
-#if defined(__APPLE__)
-    // accept can't cancel on macOS
-    fcntl(thiz.socket, F_SETFL, O_NONBLOCK);
-#endif
-
     if (::listen(thiz.socket, thiz.backlog) != 0)
     {
         LISTEN_LOG(-1, "%s %s", "listen", strerror(errno));
@@ -195,17 +191,13 @@ void Listener::Stop()
 
     if (thiz.socket > 0)
     {
-        ::shutdown(thiz.socket, SHUT_RD);
+        ::close(thiz.socket);
+        thiz.socket = 0;
     }
     if (thiz.threadListen)
     {
         ::pthread_join(thiz.threadListen, nullptr);
         thiz.threadListen = pthread_t();
-    }
-    if (thiz.socket > 0)
-    {
-        ::close(thiz.socket);
-        thiz.socket = 0;
     }
 
     std::vector<Connection*> connectionLocal;
