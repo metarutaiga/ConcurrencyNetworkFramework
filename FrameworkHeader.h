@@ -45,7 +45,7 @@
 #endif
 
 #ifndef MSG_MORE
-#   define MSG_MORE 0
+#   define MSG_MORE 0x80000000
 #endif
 
 #ifndef SOL_TCP

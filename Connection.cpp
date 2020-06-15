@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
 #include <sys/time.h>
+#include <functional>
 #include "Listener.h"
 #include "Log.h"
 #include "Socket.h"
@@ -168,7 +169,7 @@ void Connection::ProcedureRecv()
 
     BufferPtr::element_type buffer;
 
-    auto recv = [this](int socket, void* buffer, size_t bufferSize, int flags)
+    std::function<ssize_t(int, void*, size_t, int)> recv = [this](int socket, void* buffer, size_t bufferSize, int flags) -> ssize_t
     {
         ssize_t result = 0;
         while (thiz.terminate == false)
@@ -225,8 +226,31 @@ void Connection::ProcedureSend()
 {
     Connection::activeThreadCount.fetch_add(1, std::memory_order_acq_rel);
 
-    auto send = [this](int socket, const void* buffer, size_t bufferSize, int flags)
+    char socketTemp[1536];
+    int socketTempIndex = 0;
+    std::function<ssize_t(int, const void*, size_t, int)> send = [&, this](int socket, const void* buffer, size_t bufferSize, int flags) -> ssize_t
     {
+        if (flags & MSG_MORE || socketTempIndex)
+        {
+            if (bufferSize > sizeof(socketTemp) - socketTempIndex)
+            {
+                int size = socketTempIndex;
+                socketTempIndex = 0;
+                send(socket, socketTemp, size, flags & ~MSG_MORE);
+            }
+            else
+            {
+                memcpy(socketTemp + socketTempIndex, buffer, bufferSize);
+                socketTempIndex += bufferSize;
+                if (flags & MSG_MORE)
+                    return bufferSize;
+                buffer = socketTemp;
+                bufferSize = socketTempIndex;
+                socketTempIndex = 0;
+                return send(socket, buffer, bufferSize, flags & ~MSG_MORE);
+            }
+        }
+
         ssize_t result = 0;
         while (thiz.terminate == false)
         {
