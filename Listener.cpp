@@ -10,6 +10,7 @@
 #include <netinet/tcp.h>
 #include "Connection.h"
 #include "Log.h"
+#include "Socket.h"
 #include "Listener.h"
 
 #define LISTEN_LOG(level, format, ...) \
@@ -54,7 +55,7 @@ void Listener::ProcedureListen()
         int result = 0;
         while (thiz.terminate == false)
         {
-            result = ::accept(socket, addr, size);
+            result = Socket::accept(socket, addr, size);
             if (result >= 0)
                 break;
             if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
@@ -90,7 +91,7 @@ void Listener::ProcedureListen()
         Connection* connection = CreateConnection(id, addr);
         if (connection == nullptr)
         {
-            ::close(id);
+            Socket::close(id);
             continue;
         }
         if (connection->Connect() == false)
@@ -134,7 +135,7 @@ bool Listener::Start()
         return false;
     }
 
-    thiz.socket = ::socket(addrinfo->ai_family, addrinfo->ai_socktype, addrinfo->ai_protocol);
+    thiz.socket = Socket::socket(addrinfo->ai_family, addrinfo->ai_socktype, addrinfo->ai_protocol);
     if (thiz.socket <= 0)
     {
         LISTEN_LOG(-1, "%s %s", "socket", strerror(errno));
@@ -143,10 +144,10 @@ bool Listener::Start()
     }
 
     int enable = 1;
-    ::setsockopt(thiz.socket, SOL_SOCKET, SO_REUSEADDR, (void*)&enable, sizeof(enable));
-    ::setsockopt(thiz.socket, SOL_SOCKET, SO_REUSEPORT, (void*)&enable, sizeof(enable));
+    Socket::setsockopt(thiz.socket, SOL_SOCKET, SO_REUSEADDR, (void*)&enable, sizeof(enable));
+    Socket::setsockopt(thiz.socket, SOL_SOCKET, SO_REUSEPORT, (void*)&enable, sizeof(enable));
 
-    if (::bind(thiz.socket, addrinfo->ai_addr, addrinfo->ai_addrlen) != 0)
+    if (Socket::bind(thiz.socket, addrinfo->ai_addr, addrinfo->ai_addrlen) != 0)
     {
         LISTEN_LOG(-1, "%s %s", "bind", strerror(errno));
         freeaddrinfo(addrinfo);
@@ -155,9 +156,9 @@ bool Listener::Start()
     freeaddrinfo(addrinfo);
 
     int fastOpen = 5;
-    ::setsockopt(thiz.socket, SOL_TCP, TCP_FASTOPEN, &fastOpen, sizeof(fastOpen));
+    Socket::setsockopt(thiz.socket, SOL_TCP, TCP_FASTOPEN, &fastOpen, sizeof(fastOpen));
 
-    if (::listen(thiz.socket, thiz.backlog) != 0)
+    if (Socket::listen(thiz.socket, thiz.backlog) != 0)
     {
         LISTEN_LOG(-1, "%s %s", "listen", strerror(errno));
         return false;
@@ -191,7 +192,7 @@ void Listener::Stop()
 
     if (thiz.socket > 0)
     {
-        ::close(thiz.socket);
+        Socket::close(thiz.socket);
         thiz.socket = 0;
     }
     if (thiz.threadListen)

@@ -11,6 +11,7 @@
 #include <sys/time.h>
 #include "Listener.h"
 #include "Log.h"
+#include "Socket.h"
 #include "Connection.h"
 
 #define TIMED_SEMAPHORE 1
@@ -69,7 +70,7 @@ Connection::Connection(const char* address, const char* port)
         return;
     }
 
-    thiz.socket = ::socket(addrinfo->ai_family, addrinfo->ai_socktype, addrinfo->ai_protocol);
+    thiz.socket = Socket::socket(addrinfo->ai_family, addrinfo->ai_socktype, addrinfo->ai_protocol);
     if (thiz.socket <= 0)
     {
         CONNECT_LOG(-1, "%s %s", "socket", strerror(errno));
@@ -77,7 +78,7 @@ Connection::Connection(const char* address, const char* port)
         return;
     }
 
-    if (::connect(thiz.socket, addrinfo->ai_addr, addrinfo->ai_addrlen) < 0)
+    if (Socket::connect(thiz.socket, addrinfo->ai_addr, addrinfo->ai_addrlen) < 0)
     {
         CONNECT_LOG(-1, "%s %s", "connect", strerror(errno));
         ::freeaddrinfo(addrinfo);
@@ -86,7 +87,7 @@ Connection::Connection(const char* address, const char* port)
 
     struct sockaddr_storage addr = {};
     socklen_t size = sizeof(addr);
-    if (::getsockname(thiz.socket, (struct sockaddr*)&addr, &size) == 0)
+    if (Socket::getsockname(thiz.socket, (struct sockaddr*)&addr, &size) == 0)
     {
         GetAddressPort(addr, thiz.sourceAddress, thiz.sourcePort);
     }
@@ -100,7 +101,7 @@ Connection::~Connection()
 
     if (thiz.socket > 0)
     {
-        ::shutdown(thiz.socket, SHUT_RD);
+        Socket::shutdown(thiz.socket, SHUT_RD);
     }
     if (thiz.sendBufferSemaphore)
     {
@@ -131,7 +132,7 @@ Connection::~Connection()
     }
     if (thiz.socket > 0)
     {
-        ::close(thiz.socket);
+        Socket::close(thiz.socket);
         thiz.socket = 0;
     }
     if (thiz.sendBufferSemaphore)
@@ -172,7 +173,7 @@ void Connection::ProcedureRecv()
         ssize_t result = 0;
         while (thiz.terminate == false)
         {
-            result = ::recv(socket, buffer, bufferSize, flags);
+            result = Socket::recv(socket, buffer, bufferSize, flags);
             if (result >= 0)
                 break;
             if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
@@ -229,7 +230,7 @@ void Connection::ProcedureSend()
         ssize_t result = 0;
         while (thiz.terminate == false)
         {
-            result = ::send(socket, buffer, bufferSize, flags);
+            result = Socket::send(socket, buffer, bufferSize, flags);
             if (result >= 0)
                 break;
             if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
@@ -309,8 +310,8 @@ bool Connection::Connect()
         return true;
 
     int enable = 1;
-    ::setsockopt(thiz.socket, SOL_SOCKET, SO_KEEPALIVE, (void*)&enable, sizeof(enable));
-    ::setsockopt(thiz.socket, SOL_TCP, TCP_NODELAY, (void*)&enable, sizeof(enable));
+    Socket::setsockopt(thiz.socket, SOL_SOCKET, SO_KEEPALIVE, (void*)&enable, sizeof(enable));
+    Socket::setsockopt(thiz.socket, SOL_TCP, TCP_NODELAY, (void*)&enable, sizeof(enable));
 
     pthread_attr_t attr;
     ::pthread_attr_init(&attr);
