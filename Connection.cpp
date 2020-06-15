@@ -36,7 +36,7 @@ Connection::Connection(int socket, const char* address, const char* port, const 
     sem_init(&thiz.sendBufferSemaphore, 0, 0);
     if (thiz.sendBufferSemaphore == sem_t())
     {
-        CONNECT_LOG(-1, "%s %s", "sem_init", strerror(errno));
+        CONNECT_LOG(-1, "%s %s", "sem_init", strerror(errno()));
     }
 
     GetAddressPort(addr, thiz.destinationAddress, thiz.destinationPort);
@@ -56,7 +56,7 @@ Connection::Connection(const char* address, const char* port)
     sem_init(&thiz.sendBufferSemaphore, 0, 0);
     if (thiz.sendBufferSemaphore == sem_t())
     {
-        CONNECT_LOG(-1, "%s %s", "sem_init", strerror(errno));
+        CONNECT_LOG(-1, "%s %s", "sem_init", strerror(errno()));
     }
 
     struct addrinfo* addrinfo = nullptr;
@@ -74,14 +74,14 @@ Connection::Connection(const char* address, const char* port)
     thiz.socket = Socket::socket(addrinfo->ai_family, addrinfo->ai_socktype, addrinfo->ai_protocol);
     if (thiz.socket <= 0)
     {
-        CONNECT_LOG(-1, "%s %s", "socket", strerror(errno));
+        CONNECT_LOG(-1, "%s %s", "socket", Socket::strerror(Socket::errno()));
         ::freeaddrinfo(addrinfo);
         return;
     }
 
     if (Socket::connect(thiz.socket, addrinfo->ai_addr, addrinfo->ai_addrlen) < 0)
     {
-        CONNECT_LOG(-1, "%s %s", "connect", strerror(errno));
+        CONNECT_LOG(-1, "%s %s", "connect", Socket::strerror(Socket::errno()));
         ::freeaddrinfo(addrinfo);
         return;
     }
@@ -109,7 +109,7 @@ Connection::~Connection()
 #if TIMED_SEMAPHORE
         if (sem_post(&thiz.sendBufferSemaphore) < 0)
         {
-            CONNECT_LOG(-1, "%s %s", "sem_post", strerror(errno));
+            CONNECT_LOG(-1, "%s %s", "sem_post", strerror(errno()));
         }
 #else
         while (sem_post(&thiz.sendBufferSemaphore) < 0)
@@ -177,7 +177,7 @@ void Connection::ProcedureRecv()
             result = Socket::recv(socket, buffer, bufferSize, flags);
             if (result >= 0)
                 break;
-            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+            if (Socket::errno() == EAGAIN || Socket::errno() == EWOULDBLOCK || Socket::errno() == EINTR)
             {
                 struct timespec timespec;
                 timespec.tv_sec = 0;
@@ -196,7 +196,7 @@ void Connection::ProcedureRecv()
         unsigned short size = 0;
         if (recv(thiz.socket, &size, sizeof(short), MSG_WAITALL | MSG_NOSIGNAL) <= 0)
         {
-            CONNECT_LOG(-1, "%s %s", "recv", strerror(errno));
+            CONNECT_LOG(-1, "%s %s", "recv", Socket::strerror(Socket::errno()));
             break;
         }
 
@@ -211,7 +211,7 @@ void Connection::ProcedureRecv()
         buffer.resize(size);
         if (recv(thiz.socket, &buffer.front(), size, MSG_WAITALL | MSG_NOSIGNAL) <= 0)
         {
-            CONNECT_LOG(-1, "%s %s", "recv", strerror(errno));
+            CONNECT_LOG(-1, "%s %s", "recv", strerror(Socket::errno()));
             break;
         }
         Recv(buffer);
@@ -257,7 +257,7 @@ void Connection::ProcedureSend()
             result = Socket::send(socket, buffer, bufferSize, flags);
             if (result >= 0)
                 break;
-            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+            if (Socket::errno() == EAGAIN || Socket::errno() == EWOULDBLOCK || Socket::errno() == EINTR)
             {
                 struct timespec timespec;
                 timespec.tv_sec = 0;
@@ -289,7 +289,7 @@ void Connection::ProcedureSend()
                 unsigned short size = (short)buffer.size();
                 if (send(thiz.socket, &size, sizeof(short), MSG_WAITALL | MSG_NOSIGNAL | MSG_MORE) <= 0)
                 {
-                    CONNECT_LOG(-1, "%s %s", "send", strerror(errno));
+                    CONNECT_LOG(-1, "%s %s", "send", Socket::strerror(Socket::errno()));
                     break;
                 }
 
@@ -303,7 +303,7 @@ void Connection::ProcedureSend()
                 // Data
                 if (send(thiz.socket, &buffer.front(), size, MSG_WAITALL | MSG_NOSIGNAL) <= 0)
                 {
-                    CONNECT_LOG(-1, "%s %s", "send", strerror(errno));
+                    CONNECT_LOG(-1, "%s %s", "send", Socket::strerror(Socket::errno()));
                     break;
                 }
             }
@@ -357,7 +357,7 @@ bool Connection::Connect()
     ::pthread_attr_destroy(&attr);
     if (thiz.threadRecv == pthread_t() || thiz.threadSend == pthread_t())
     {
-        CONNECT_LOG(-1, "%s %s", "thread", strerror(errno));
+        CONNECT_LOG(-1, "%s %s", "thread", strerror(errno()));
         return false;
     }
 
@@ -396,7 +396,7 @@ void Connection::Send(const BufferPtr& bufferPtr)
 
     if (sem_post(&thiz.sendBufferSemaphore) < 0)
     {
-        CONNECT_LOG(-1, "%s %s", "sem_post", strerror(errno));
+        CONNECT_LOG(-1, "%s %s", "sem_post", strerror(errno()));
     }
 }
 //------------------------------------------------------------------------------

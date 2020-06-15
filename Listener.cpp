@@ -58,7 +58,7 @@ void Listener::ProcedureListen()
             result = Socket::accept(socket, addr, size);
             if (result >= 0)
                 break;
-            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+            if (Socket::errno() == EAGAIN || Socket::errno() == EWOULDBLOCK || Socket::errno() == EINTR)
             {
                 struct timespec timespec;
                 timespec.tv_sec = 0;
@@ -78,7 +78,7 @@ void Listener::ProcedureListen()
         int id = accept(thiz.socket, (struct sockaddr*)&addr, &size);
         if (id <= 0)
         {
-            LISTEN_LOG(-1, "%s %s", "accept", strerror(errno));
+            LISTEN_LOG(-1, "%s %s", "accept", Socket::strerror(Socket::errno()));
             break;
         }
         char* address = nullptr;
@@ -138,7 +138,7 @@ bool Listener::Start()
     thiz.socket = Socket::socket(addrinfo->ai_family, addrinfo->ai_socktype, addrinfo->ai_protocol);
     if (thiz.socket <= 0)
     {
-        LISTEN_LOG(-1, "%s %s", "socket", strerror(errno));
+        LISTEN_LOG(-1, "%s %s", "socket", Socket::strerror(Socket::errno()));
         freeaddrinfo(addrinfo);
         return false;
     }
@@ -149,7 +149,7 @@ bool Listener::Start()
 
     if (Socket::bind(thiz.socket, addrinfo->ai_addr, addrinfo->ai_addrlen) != 0)
     {
-        LISTEN_LOG(-1, "%s %s", "bind", strerror(errno));
+        LISTEN_LOG(-1, "%s %s", "bind", Socket::strerror(Socket::errno()));
         freeaddrinfo(addrinfo);
         return false;
     }
@@ -160,7 +160,7 @@ bool Listener::Start()
 
     if (Socket::listen(thiz.socket, thiz.backlog) != 0)
     {
-        LISTEN_LOG(-1, "%s %s", "listen", strerror(errno));
+        LISTEN_LOG(-1, "%s %s", "listen", Socket::strerror(Socket::errno()));
         return false;
     }
 
@@ -178,7 +178,7 @@ bool Listener::Start()
     ::pthread_attr_destroy(&attr);
     if (thiz.threadListen == pthread_t())
     {
-        LISTEN_LOG(-1, "%s %s", "thread", strerror(errno));
+        LISTEN_LOG(-1, "%s %s", "thread", strerror(errno()));
         return false;
     }
 

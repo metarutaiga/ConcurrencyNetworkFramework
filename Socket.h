@@ -6,7 +6,20 @@
 //==============================================================================
 #pragma once
 
+#include <sys/errno.h>
 #include <sys/socket.h>
+
+#undef errno
+inline int errno()
+{
+#if defined(__ANDROID__)
+    return (*__errno());
+#elif defined(__APPLE__)
+    return (*__error());
+#else
+    return ::errno;
+#endif
+}
 
 class Socket
 {
@@ -15,6 +28,7 @@ public:
     static int (*bind)(int socket, const struct sockaddr* name, socklen_t namelen);
     static int (*connect)(int socket, const struct sockaddr* name, socklen_t namelen);
     static int (*close)(int socket);
+    static int (*errno)();
     static int (*getpeername)(int socket, struct sockaddr* name, socklen_t* namelen);
     static int (*getsockname)(int socket, struct sockaddr* name, socklen_t* namelen);
     static int (*getsockopt)(int socket, int level, int optname, void* optval, socklen_t* optlen);
@@ -24,4 +38,5 @@ public:
     static ssize_t (*send)(int socket, const void* buf, size_t len, int flags);
     static int (*shutdown)(int socket, int flags);
     static int (*socket)(int af, int type, int protocol);
+    static char* (*strerror)(int errnum);
 };
