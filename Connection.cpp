@@ -38,6 +38,8 @@ Connection::Connection(int socket, const char* address, const char* port, const 
     thiz.threadSendUDP = pthread_t();
     thiz.sendBufferSemaphoreTCP = sem_t();
     thiz.sendBufferSemaphoreUDP = sem_t();
+    thiz.readyTCP = true;
+    thiz.readyUDP = false;
 
     sem_init(&thiz.sendBufferSemaphoreTCP, 0, 0);
     sem_init(&thiz.sendBufferSemaphoreUDP, 0, 0);
@@ -61,6 +63,8 @@ Connection::Connection(const char* address, const char* port)
     thiz.threadSendUDP = pthread_t();
     thiz.sendBufferSemaphoreTCP = sem_t();
     thiz.sendBufferSemaphoreUDP = sem_t();
+    thiz.readyTCP = false;
+    thiz.readyUDP = false;
 
     sem_init(&thiz.sendBufferSemaphoreTCP, 0, 0);
     sem_init(&thiz.sendBufferSemaphoreUDP, 0, 0);
@@ -91,6 +95,7 @@ Connection::Connection(const char* address, const char* port)
         ::freeaddrinfo(addrinfo);
         return;
     }
+    thiz.readyTCP = true;
 
     struct sockaddr_storage addr = {};
     socklen_t size = sizeof(addr);
@@ -623,7 +628,7 @@ void Connection::Send(const BufferPtr& bufferPtr)
     thiz.sendBuffer.emplace_back(bufferPtr);
     thiz.sendBufferMutex.unlock();
 
-    if (thiz.threadSendUDP == pthread_t() || (*bufferPtr).size() > 1280)
+    if (thiz.readyUDP == false || (*bufferPtr).size() > 1280)
     {
         if (sem_post(&thiz.sendBufferSemaphoreTCP) < 0)
         {

@@ -32,6 +32,9 @@ protected:
     sem_t sendBufferSemaphoreTCP;
     sem_t sendBufferSemaphoreUDP;
 
+    bool readyTCP;
+    bool readyUDP;
+
     static std::atomic_uint activeThreadCount;
 
 protected:
