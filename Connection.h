@@ -16,23 +16,29 @@ class Connection
 protected:
     volatile bool terminate;
 
-    int socket;
+    int socketTCP;
+    int socketUDP;
     char* sourceAddress;
     char* sourcePort;
     char* destinationAddress;
     char* destinationPort;
-    pthread_t threadRecv;
-    pthread_t threadSend;
+    pthread_t threadRecvTCP;
+    pthread_t threadSendTCP;
+    pthread_t threadRecvUDP;
+    pthread_t threadSendUDP;
 
     std::vector<BufferPtr> sendBuffer;
     std::mutex sendBufferMutex;
-    sem_t sendBufferSemaphore;
+    sem_t sendBufferSemaphoreTCP;
+    sem_t sendBufferSemaphoreUDP;
 
     static std::atomic_uint activeThreadCount;
 
 protected:
-    virtual void ProcedureRecv();
-    virtual void ProcedureSend();
+    virtual void ProcedureRecvTCP();
+    virtual void ProcedureSendTCP();
+    virtual void ProcedureRecvUDP();
+    virtual void ProcedureSendUDP();
 
 protected:
     virtual ~Connection();
@@ -42,6 +48,7 @@ public:
     Connection(const char* address, const char* port);
 
     virtual bool Connect();
+    virtual bool ConnectUDP();
     virtual bool Alive();
     virtual void Disconnect();
 
@@ -49,5 +56,6 @@ public:
     virtual void Recv(const BufferPtr::element_type& buffer);
 
     static void GetAddressPort(const struct sockaddr_storage& addr, char*& address, char*& port);
+    static int SetAddressPort(struct sockaddr_storage& addr, const char* address, const char* port);
     static unsigned int GetActiveThreadCount();
 };
