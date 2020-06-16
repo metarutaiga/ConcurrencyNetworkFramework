@@ -6,6 +6,11 @@
 //==============================================================================
 #pragma once
 
+#include <atomic>
+#include <memory>
+#include <mutex>
+#include <vector>
+
 #include <pthread.h>
 #if defined(__APPLE__)
 #   include <dispatch/dispatch.h>
@@ -23,18 +28,23 @@
         {
             return true;
         }
-        bool operator == (const sem_t& other) const
-        {
-            return false;
-        }
     };
 #   define sem_t                sem_comparable_t
 #endif
 
-#include <atomic>
-#include <memory>
-#include <mutex>
-#include <vector>
+#include <sys/errno.h>
+#undef errno
+static inline int errno()
+{
+#if defined(__ANDROID__)
+    return (*__errno());
+#elif defined(__APPLE__)
+    return (*__error());
+#else
+    return ::errno;
+#endif
+}
+#define errno errno()
 
 #if defined(HAVE_CONFIG_H)
 #   include "config.h"

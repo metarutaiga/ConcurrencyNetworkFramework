@@ -8,6 +8,8 @@
 #include <unistd.h>
 #include "Socket.h"
 
+#undef errno
+
 int (*Socket::accept)(int socket, struct sockaddr* addr, socklen_t* addrlen) = ::accept;
 int (*Socket::bind)(int socket, const struct sockaddr* name, socklen_t namelen) = ::bind;
 int (*Socket::connect)(int socket, const struct sockaddr* name, socklen_t namelen) = ::connect;

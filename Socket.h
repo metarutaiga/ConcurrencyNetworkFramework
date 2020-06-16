@@ -6,20 +6,9 @@
 //==============================================================================
 #pragma once
 
-#include <sys/errno.h>
 #include <sys/socket.h>
-
+#include "FrameworkHeader.h"
 #undef errno
-inline int errno()
-{
-#if defined(__ANDROID__)
-    return (*__errno());
-#elif defined(__APPLE__)
-    return (*__error());
-#else
-    return ::errno;
-#endif
-}
 
 class Socket
 {
@@ -40,3 +29,5 @@ public:
     static int (*socket)(int af, int type, int protocol);
     static char* (*strerror)(int errnum);
 };
+
+#define errno errno()
