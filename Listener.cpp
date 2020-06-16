@@ -94,7 +94,7 @@ void Listener::ProcedureListen()
             Socket::close(id);
             continue;
         }
-        if (connection->Connect() == false)
+        if (connection->ConnectTCP() == false)
         {
             connection->Disconnect();
             continue;

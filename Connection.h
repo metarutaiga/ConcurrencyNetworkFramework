@@ -18,22 +18,23 @@ protected:
 
     int socketTCP;
     int socketUDP;
-    char* sourceAddress;
-    char* sourcePort;
-    char* destinationAddress;
-    char* destinationPort;
-    pthread_t threadRecvTCP;
-    pthread_t threadSendTCP;
-    pthread_t threadRecvUDP;
-    pthread_t threadSendUDP;
+    bool readyTCP;
+    bool readyUDP;
 
     std::vector<BufferPtr> sendBuffer;
     std::mutex sendBufferMutex;
     sem_t sendBufferSemaphoreTCP;
     sem_t sendBufferSemaphoreUDP;
 
-    bool readyTCP;
-    bool readyUDP;
+    char* sourceAddress;
+    char* sourcePort;
+    char* destinationAddress;
+    char* destinationPort;
+
+    pthread_t threadRecvTCP;
+    pthread_t threadSendTCP;
+    pthread_t threadRecvUDP;
+    pthread_t threadSendUDP;
 
     static std::atomic_uint activeThreadCount;
 
@@ -50,7 +51,7 @@ public:
     Connection(int socket, const char* address, const char* port, const struct sockaddr_storage& addr);
     Connection(const char* address, const char* port);
 
-    virtual bool Connect();
+    virtual bool ConnectTCP();
     virtual bool ConnectUDP();
     virtual bool Alive();
     virtual void Disconnect();

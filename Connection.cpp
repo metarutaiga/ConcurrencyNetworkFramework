@@ -28,6 +28,10 @@ Connection::Connection(int socket, const char* address, const char* port, const 
 
     thiz.socketTCP = socket;
     thiz.socketUDP = 0;
+    thiz.readyTCP = true;
+    thiz.readyUDP = false;
+    thiz.sendBufferSemaphoreTCP = sem_t();
+    thiz.sendBufferSemaphoreUDP = sem_t();
     thiz.sourceAddress = address ? strdup(address) : nullptr;
     thiz.sourcePort = port ? strdup(port) : nullptr;
     thiz.destinationAddress = nullptr;
@@ -36,10 +40,6 @@ Connection::Connection(int socket, const char* address, const char* port, const 
     thiz.threadSendTCP = pthread_t();
     thiz.threadRecvUDP = pthread_t();
     thiz.threadSendUDP = pthread_t();
-    thiz.sendBufferSemaphoreTCP = sem_t();
-    thiz.sendBufferSemaphoreUDP = sem_t();
-    thiz.readyTCP = true;
-    thiz.readyUDP = false;
 
     sem_init(&thiz.sendBufferSemaphoreTCP, 0, 0);
     sem_init(&thiz.sendBufferSemaphoreUDP, 0, 0);
@@ -53,6 +53,10 @@ Connection::Connection(const char* address, const char* port)
 
     thiz.socketTCP = 0;
     thiz.socketUDP = 0;
+    thiz.readyTCP = false;
+    thiz.readyUDP = false;
+    thiz.sendBufferSemaphoreTCP = sem_t();
+    thiz.sendBufferSemaphoreUDP = sem_t();
     thiz.sourceAddress = nullptr;
     thiz.sourcePort = nullptr;
     thiz.destinationAddress = address ? strdup(address) : nullptr;
@@ -61,10 +65,6 @@ Connection::Connection(const char* address, const char* port)
     thiz.threadSendTCP = pthread_t();
     thiz.threadRecvUDP = pthread_t();
     thiz.threadSendUDP = pthread_t();
-    thiz.sendBufferSemaphoreTCP = sem_t();
-    thiz.sendBufferSemaphoreUDP = sem_t();
-    thiz.readyTCP = false;
-    thiz.readyUDP = false;
 
     sem_init(&thiz.sendBufferSemaphoreTCP, 0, 0);
     sem_init(&thiz.sendBufferSemaphoreUDP, 0, 0);
@@ -495,7 +495,7 @@ void Connection::ProcedureSendUDP()
     Connection::activeThreadCount.fetch_sub(1, std::memory_order_acq_rel);
 }
 //------------------------------------------------------------------------------
-bool Connection::Connect()
+bool Connection::ConnectTCP()
 {
     if (thiz.socketTCP <= 0)
         return false;
