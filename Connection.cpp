@@ -219,7 +219,7 @@ void Connection::ProcedureRecvTCP()
 {
     Connection::activeThreadCount[0].fetch_add(1, std::memory_order_acq_rel);
 
-    BufferPtr::element_type buffer;
+    Buffer::element_type buffer;
 
     while (thiz.terminate == false)
     {
@@ -261,17 +261,17 @@ void Connection::ProcedureSendTCP()
 
     while (thiz.terminate == false)
     {
-        BufferPtr bufferPtr;
+        Buffer sendBuffer;
         thiz.sendBufferMutexTCP.lock();
         if (thiz.sendBufferTCP.empty() == false)
         {
-            thiz.sendBufferTCP.front().swap(bufferPtr);
+            thiz.sendBufferTCP.front().swap(sendBuffer);
             thiz.sendBufferTCP.erase(thiz.sendBufferTCP.begin());
         }
         thiz.sendBufferMutexTCP.unlock();
-        if (bufferPtr)
+        if (sendBuffer)
         {
-            const auto& buffer = (*bufferPtr);
+            const auto& buffer = (*sendBuffer);
             if (buffer.size() <= USHRT_MAX)
             {
                 // Length
@@ -296,7 +296,6 @@ void Connection::ProcedureSendTCP()
                     break;
                 }
             }
-            BufferPool::Push(bufferPtr);
         }
         if (thiz.sendBufferTCP.empty() == false)
             continue;
@@ -322,7 +321,7 @@ void Connection::ProcedureRecvUDP()
 {
     Connection::activeThreadCount[2].fetch_add(1, std::memory_order_acq_rel);
 
-    BufferPtr::element_type buffer;
+    Buffer::element_type buffer;
 
     while (thiz.terminate == false)
     {
@@ -352,17 +351,17 @@ void Connection::ProcedureSendUDP()
 
     while (thiz.terminate == false)
     {
-        BufferPtr bufferPtr;
+        Buffer sendBuffer;
         thiz.sendBufferMutexUDP.lock();
         if (thiz.sendBufferUDP.empty() == false)
         {
-            thiz.sendBufferUDP.front().swap(bufferPtr);
+            thiz.sendBufferUDP.front().swap(sendBuffer);
             thiz.sendBufferUDP.erase(thiz.sendBufferUDP.begin());
         }
         thiz.sendBufferMutexUDP.unlock();
-        if (bufferPtr)
+        if (sendBuffer)
         {
-            const auto& buffer = (*bufferPtr);
+            const auto& buffer = (*sendBuffer);
             if (buffer.size() <= UDP_MAX_SIZE)
             {
                 // Data
@@ -372,7 +371,6 @@ void Connection::ProcedureSendUDP()
                     break;
                 }
             }
-            BufferPool::Push(bufferPtr);
         }
         if (thiz.sendBufferUDP.empty() == false)
             continue;
@@ -521,12 +519,12 @@ void Connection::Disconnect()
     ::pthread_attr_destroy(&attr);
 }
 //------------------------------------------------------------------------------
-void Connection::Send(const BufferPtr& bufferPtr)
+void Connection::Send(const Buffer& buffer)
 {
-    if (thiz.readyUDP && (*bufferPtr).size() <= UDP_MAX_SIZE)
+    if (thiz.readyUDP && (*buffer).size() <= UDP_MAX_SIZE)
     {
         thiz.sendBufferMutexUDP.lock();
-        thiz.sendBufferUDP.emplace_back(bufferPtr);
+        thiz.sendBufferUDP.emplace_back(buffer);
         thiz.sendBufferMutexUDP.unlock();
         if (sem_post(&thiz.sendBufferSemaphoreUDP) < 0)
         {
@@ -536,7 +534,7 @@ void Connection::Send(const BufferPtr& bufferPtr)
     else if (thiz.readyTCP)
     {
         thiz.sendBufferMutexTCP.lock();
-        thiz.sendBufferTCP.emplace_back(bufferPtr);
+        thiz.sendBufferTCP.emplace_back(buffer);
         thiz.sendBufferMutexTCP.unlock();
         if (sem_post(&thiz.sendBufferSemaphoreTCP) < 0)
         {
@@ -545,7 +543,7 @@ void Connection::Send(const BufferPtr& bufferPtr)
     }
 }
 //------------------------------------------------------------------------------
-void Connection::Recv(const BufferPtr::element_type& buffer)
+void Connection::Recv(const Buffer::element_type& buffer)
 {
     CONNECT_LOG(TCP, 0, "%s %zd", "recv", buffer.size());
 }

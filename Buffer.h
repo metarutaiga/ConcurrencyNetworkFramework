@@ -6,12 +6,14 @@
 //==============================================================================
 #pragma once
 
-typedef std::shared_ptr<std::vector<char>> BufferPtr;
+#include "FrameworkHeader.h"
 
-class BufferPool
+class Buffer : public std::shared_ptr<std::vector<char>>
 {
+    static void Recycle(Buffer::element_type* pointer);
+
 public:
-    static BufferPtr Get(size_t size);
-    static void Push(BufferPtr& bufferPtr);
+    static void Clean();
+    static Buffer Get(size_t size);
     static size_t Count();
 };

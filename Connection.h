@@ -19,8 +19,8 @@ protected:
     int socketTCP;
     int socketUDP;
 
-    std::vector<BufferPtr> sendBufferTCP;
-    std::vector<BufferPtr> sendBufferUDP;
+    std::vector<Buffer> sendBufferTCP;
+    std::vector<Buffer> sendBufferUDP;
     std::mutex sendBufferMutexTCP;
     std::mutex sendBufferMutexUDP;
     sem_t sendBufferSemaphoreTCP;
@@ -56,8 +56,8 @@ public:
     virtual bool Alive();
     virtual void Disconnect();
 
-    virtual void Send(const BufferPtr& bufferPtr);
-    virtual void Recv(const BufferPtr::element_type& buffer);
+    virtual void Send(const Buffer& buffer);
+    virtual void Recv(const Buffer::element_type& buffer);
 
     static void GetAddressPort(const struct sockaddr_storage& addr, char*& address, char*& port);
     static int SetAddressPort(struct sockaddr_storage& addr, const char* address, const char* port);

@@ -5,6 +5,7 @@
 // https://github.com/metarutaiga/ConcurrencyNetworkFramework
 //==============================================================================
 #include "time.h"
+#include "Buffer.h"
 #include "Event.h"
 #include "Listener.h"
 #include "Log.h"
@@ -18,7 +19,7 @@ Framework::Framework()
 //------------------------------------------------------------------------------
 Framework::~Framework()
 {
-
+    Buffer::Clean();
 }
 //------------------------------------------------------------------------------
 void Framework::Terminate()

@@ -7,37 +7,57 @@
 #include "FrameworkHeader.h"
 #include "Buffer.h"
 
-std::vector<BufferPtr> bufferPool;
-std::mutex bufferPoolMutex;
+static std::vector<Buffer> bufferPool;
+static std::mutex bufferPoolMutex;
+static bool bufferPoolTerminate;
 //------------------------------------------------------------------------------
-BufferPtr BufferPool::Get(size_t size)
+void Buffer::Recycle(Buffer::element_type* pointer)
 {
-    BufferPtr bufferPtr;
+    if (bufferPoolTerminate)
+    {
+        delete pointer;
+        return;
+    }
+
+    bufferPoolMutex.lock();
+    bufferPool.push_back(Buffer());
+    bufferPool.back().reset(pointer, Buffer::Recycle);
+    bufferPoolMutex.unlock();
+}
+//------------------------------------------------------------------------------
+void Buffer::Clean()
+{
+    bufferPoolTerminate = true;
+    bufferPoolMutex.lock();
+    bufferPool.clear();
+    bufferPoolMutex.unlock();
+    bufferPoolTerminate = false;
+}
+//------------------------------------------------------------------------------
+Buffer Buffer::Get(size_t size)
+{
+    Buffer buffer;
     bufferPoolMutex.lock();
     if (bufferPool.empty() == false)
     {
-        bufferPool.back().swap(bufferPtr);
+        bufferPool.back().swap(buffer);
         bufferPool.pop_back();
     }
     bufferPoolMutex.unlock();
-    if (bufferPtr)
+    Buffer::element_type* pointer = buffer.get();
+    if (pointer == nullptr)
     {
-        (*bufferPtr).resize(size);
-        return bufferPtr;
+        pointer = new Buffer::element_type;
+        buffer.reset(pointer, Buffer::Recycle);
     }
-    return bufferPtr.make_shared(size);
+    if (pointer)
+    {
+        pointer->resize(size);
+    }
+    return buffer;
 }
 //------------------------------------------------------------------------------
-void BufferPool::Push(BufferPtr& bufferPtr)
-{
-    if (bufferPtr.use_count() != 1)
-        return;
-    bufferPoolMutex.lock();
-    bufferPool.emplace_back(bufferPtr);
-    bufferPoolMutex.unlock();
-}
-//------------------------------------------------------------------------------
-size_t BufferPool::Count()
+size_t Buffer::Count()
 {
     return bufferPool.size();
 }
