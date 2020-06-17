@@ -7,8 +7,7 @@
 #pragma once
 
 #include "FrameworkHeader.h"
-
-typedef std::shared_ptr<std::vector<char>> BufferPtr;
+#include "Buffer.h"
 
 class Connection
 {

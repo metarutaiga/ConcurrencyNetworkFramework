@@ -296,6 +296,7 @@ void Connection::ProcedureSendTCP()
                     break;
                 }
             }
+            BufferPool::Push(bufferPtr);
         }
         if (thiz.sendBufferTCP.empty() == false)
             continue;
@@ -371,6 +372,7 @@ void Connection::ProcedureSendUDP()
                     break;
                 }
             }
+            BufferPool::Push(bufferPtr);
         }
         if (thiz.sendBufferUDP.empty() == false)
             continue;
