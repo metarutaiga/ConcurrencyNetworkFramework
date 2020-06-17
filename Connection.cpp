@@ -9,13 +9,13 @@
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
 #include <sys/time.h>
-#include <functional>
 #include "Listener.h"
 #include "Log.h"
 #include "Socket.h"
 #include "Connection.h"
 
 #define TIMED_SEMAPHORE 1
+#define UDP_MAX_SIZE    1280
 
 #define CONNECT_LOG(proto, level, format, ...) \
     Log::Format(level, "%s %d (%s:%s:%s@%s:%s) : " format, "Connect", thiz.socket ## proto, #proto, thiz.sourceAddress, thiz.sourcePort, thiz.destinationAddress, thiz.destinationPort, __VA_ARGS__)
@@ -221,32 +221,11 @@ void Connection::ProcedureRecvTCP()
 
     BufferPtr::element_type buffer;
 
-    std::function<ssize_t(int, void*, size_t, int)> recv = [this](int socket, void* buffer, size_t bufferSize, int flags) -> ssize_t
-    {
-        ssize_t result = 0;
-        while (thiz.terminate == false)
-        {
-            result = Socket::recv(socket, buffer, bufferSize, flags);
-            if (result >= 0)
-                break;
-            if (Socket::errno == EAGAIN || Socket::errno == EWOULDBLOCK || Socket::errno == EINTR)
-            {
-                struct timespec timespec;
-                timespec.tv_sec = 0;
-                timespec.tv_nsec = 1000 * 1000 * 1000 / 60;
-                nanosleep(&timespec, nullptr);
-                continue;
-            }
-            break;
-        }
-        return result;
-    };
-
     while (thiz.terminate == false)
     {
         // Length
         unsigned short size = 0;
-        if (recv(thiz.socketTCP, &size, sizeof(short), MSG_WAITALL | MSG_NOSIGNAL) <= 0)
+        if (Socket::recv(thiz.socketTCP, &size, sizeof(short), MSG_WAITALL | MSG_NOSIGNAL) <= 0)
         {
             CONNECT_LOG(TCP, -1, "%s %s", "recv", Socket::strerror(Socket::errno));
             break;
@@ -261,7 +240,7 @@ void Connection::ProcedureRecvTCP()
 
         // Data
         buffer.resize(size);
-        if (recv(thiz.socketTCP, &buffer.front(), size, MSG_WAITALL | MSG_NOSIGNAL) <= 0)
+        if (Socket::recv(thiz.socketTCP, &buffer.front(), size, MSG_WAITALL | MSG_NOSIGNAL) <= 0)
         {
             CONNECT_LOG(TCP, -1, "%s %s", "recv", strerror(Socket::errno));
             break;
@@ -278,60 +257,18 @@ void Connection::ProcedureSendTCP()
 {
     Connection::activeThreadCount.fetch_add(1, std::memory_order_acq_rel);
 
-    char socketTemp[1280];
-    int socketTempIndex = 0;
-    std::function<ssize_t(int, const void*, size_t, int)> send = [&, this](int socket, const void* buffer, size_t bufferSize, int flags) -> ssize_t
-    {
-        if (flags & MSG_MORE || socketTempIndex)
-        {
-            if (bufferSize > sizeof(socketTemp) - socketTempIndex)
-            {
-                int size = socketTempIndex;
-                socketTempIndex = 0;
-                send(socket, socketTemp, size, flags & ~MSG_MORE);
-            }
-            else
-            {
-                memcpy(socketTemp + socketTempIndex, buffer, bufferSize);
-                socketTempIndex += bufferSize;
-                if (flags & MSG_MORE)
-                    return bufferSize;
-                buffer = socketTemp;
-                bufferSize = socketTempIndex;
-                socketTempIndex = 0;
-                return send(socket, buffer, bufferSize, flags & ~MSG_MORE);
-            }
-        }
-
-        ssize_t result = 0;
-        while (thiz.terminate == false)
-        {
-            result = Socket::send(socket, buffer, bufferSize, flags);
-            if (result >= 0)
-                break;
-            if (Socket::errno == EAGAIN || Socket::errno == EWOULDBLOCK || Socket::errno == EINTR)
-            {
-                struct timespec timespec;
-                timespec.tv_sec = 0;
-                timespec.tv_nsec = 1000 * 1000 * 1000 / 60;
-                nanosleep(&timespec, nullptr);
-                continue;
-            }
-            break;
-        }
-        return result;
-    };
+    char cork[Socket::CORK_SIZE] = {};
 
     while (thiz.terminate == false)
     {
         BufferPtr bufferPtr;
-        thiz.sendBufferMutex.lock();
-        if (thiz.sendBuffer.empty() == false)
+        thiz.sendBufferMutexTCP.lock();
+        if (thiz.sendBufferTCP.empty() == false)
         {
-            thiz.sendBuffer.front().swap(bufferPtr);
-            thiz.sendBuffer.erase(thiz.sendBuffer.begin());
+            thiz.sendBufferTCP.front().swap(bufferPtr);
+            thiz.sendBufferTCP.erase(thiz.sendBufferTCP.begin());
         }
-        thiz.sendBufferMutex.unlock();
+        thiz.sendBufferMutexTCP.unlock();
         if (bufferPtr)
         {
             const auto& buffer = (*bufferPtr);
@@ -339,7 +276,7 @@ void Connection::ProcedureSendTCP()
             {
                 // Length
                 unsigned short size = (short)buffer.size();
-                if (send(thiz.socketTCP, &size, sizeof(short), MSG_WAITALL | MSG_NOSIGNAL | MSG_MORE) <= 0)
+                if (Socket::send(thiz.socketTCP, &size, sizeof(short), MSG_WAITALL | MSG_NOSIGNAL | MSG_MORE, cork) <= 0)
                 {
                     CONNECT_LOG(TCP, -1, "%s %s", "send", Socket::strerror(Socket::errno));
                     break;
@@ -353,14 +290,14 @@ void Connection::ProcedureSendTCP()
                 }
 
                 // Data
-                if (send(thiz.socketTCP, &buffer.front(), size, MSG_WAITALL | MSG_NOSIGNAL) <= 0)
+                if (Socket::send(thiz.socketTCP, &buffer.front(), size, MSG_WAITALL | MSG_NOSIGNAL, cork) <= 0)
                 {
                     CONNECT_LOG(TCP, -1, "%s %s", "send", Socket::strerror(Socket::errno));
                     break;
                 }
             }
         }
-        if (thiz.sendBuffer.empty() == false)
+        if (thiz.sendBufferTCP.empty() == false)
             continue;
 
 #if TIMED_SEMAPHORE
@@ -386,33 +323,12 @@ void Connection::ProcedureRecvUDP()
 
     BufferPtr::element_type buffer;
 
-    std::function<ssize_t(int, void*, size_t, int)> recv = [this](int socket, void* buffer, size_t bufferSize, int flags) -> ssize_t
-    {
-        ssize_t result = 0;
-        while (thiz.terminate == false)
-        {
-            result = Socket::recv(socket, buffer, bufferSize, flags);
-            if (result >= 0)
-                break;
-            if (Socket::errno == EAGAIN || Socket::errno == EWOULDBLOCK || Socket::errno == EINTR)
-            {
-                struct timespec timespec;
-                timespec.tv_sec = 0;
-                timespec.tv_nsec = 1000 * 1000 * 1000 / 60;
-                nanosleep(&timespec, nullptr);
-                continue;
-            }
-            break;
-        }
-        return result;
-    };
-
     while (thiz.terminate == false)
     {
-        buffer.resize(1280);
+        buffer.resize(UDP_MAX_SIZE);
 
         // Data
-        long size = recv(thiz.socketUDP, &buffer.front(), buffer.size(), MSG_WAITALL | MSG_NOSIGNAL);
+        long size = Socket::recv(thiz.socketUDP, &buffer.front(), buffer.size(), MSG_WAITALL | MSG_NOSIGNAL);
         if (size <= 0)
         {
             CONNECT_LOG(UDP, -1, "%s %s", "recv", strerror(Socket::errno));
@@ -431,51 +347,32 @@ void Connection::ProcedureSendUDP()
 {
     Connection::activeThreadCount.fetch_add(1, std::memory_order_acq_rel);
 
-    std::function<ssize_t(int, const void*, size_t, int)> send = [this](int socket, const void* buffer, size_t bufferSize, int flags) -> ssize_t
-    {
-        ssize_t result = 0;
-        while (thiz.terminate == false)
-        {
-            result = Socket::send(socket, buffer, bufferSize, flags);
-            if (result >= 0)
-                break;
-            if (Socket::errno == EAGAIN || Socket::errno == EWOULDBLOCK || Socket::errno == EINTR)
-            {
-                struct timespec timespec;
-                timespec.tv_sec = 0;
-                timespec.tv_nsec = 1000 * 1000 * 1000 / 60;
-                nanosleep(&timespec, nullptr);
-                continue;
-            }
-            break;
-        }
-        return result;
-    };
+    char cork[Socket::CORK_SIZE] = {};
 
     while (thiz.terminate == false)
     {
         BufferPtr bufferPtr;
-        thiz.sendBufferMutex.lock();
-        if (thiz.sendBuffer.empty() == false)
+        thiz.sendBufferMutexUDP.lock();
+        if (thiz.sendBufferUDP.empty() == false)
         {
-            thiz.sendBuffer.front().swap(bufferPtr);
-            thiz.sendBuffer.erase(thiz.sendBuffer.begin());
+            thiz.sendBufferUDP.front().swap(bufferPtr);
+            thiz.sendBufferUDP.erase(thiz.sendBufferUDP.begin());
         }
-        thiz.sendBufferMutex.unlock();
+        thiz.sendBufferMutexUDP.unlock();
         if (bufferPtr)
         {
             const auto& buffer = (*bufferPtr);
-            if (buffer.size() <= 1280)
+            if (buffer.size() <= UDP_MAX_SIZE)
             {
                 // Data
-                if (send(thiz.socketUDP, &buffer.front(), buffer.size(), MSG_WAITALL | MSG_NOSIGNAL) <= 0)
+                if (Socket::send(thiz.socketUDP, &buffer.front(), buffer.size(), MSG_WAITALL | MSG_NOSIGNAL, cork) <= 0)
                 {
                     CONNECT_LOG(UDP, -1, "%s %s", "send", Socket::strerror(Socket::errno));
                     break;
                 }
             }
         }
-        if (thiz.sendBuffer.empty() == false)
+        if (thiz.sendBufferUDP.empty() == false)
             continue;
 
 #if TIMED_SEMAPHORE
@@ -624,22 +521,24 @@ void Connection::Disconnect()
 //------------------------------------------------------------------------------
 void Connection::Send(const BufferPtr& bufferPtr)
 {
-    thiz.sendBufferMutex.lock();
-    thiz.sendBuffer.emplace_back(bufferPtr);
-    thiz.sendBufferMutex.unlock();
-
-    if (thiz.readyUDP == false || (*bufferPtr).size() > 1280)
+    if (thiz.readyUDP && (*bufferPtr).size() <= UDP_MAX_SIZE)
     {
-        if (sem_post(&thiz.sendBufferSemaphoreTCP) < 0)
-        {
-            CONNECT_LOG(TCP, -1, "%s %s", "sem_post", strerror(errno));
-        }
-    }
-    else
-    {
+        thiz.sendBufferMutexUDP.lock();
+        thiz.sendBufferUDP.emplace_back(bufferPtr);
+        thiz.sendBufferMutexUDP.unlock();
         if (sem_post(&thiz.sendBufferSemaphoreUDP) < 0)
         {
             CONNECT_LOG(UDP, -1, "%s %s", "sem_post", strerror(errno));
+        }
+    }
+    else if (thiz.readyTCP)
+    {
+        thiz.sendBufferMutexTCP.lock();
+        thiz.sendBufferTCP.emplace_back(bufferPtr);
+        thiz.sendBufferMutexTCP.unlock();
+        if (sem_post(&thiz.sendBufferSemaphoreTCP) < 0)
+        {
+            CONNECT_LOG(TCP, -1, "%s %s", "sem_post", strerror(errno));
         }
     }
 }

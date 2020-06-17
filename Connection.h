@@ -16,13 +16,15 @@ class Connection
 protected:
     volatile bool terminate;
 
-    int socketTCP;
-    int socketUDP;
     bool readyTCP;
     bool readyUDP;
+    int socketTCP;
+    int socketUDP;
 
-    std::vector<BufferPtr> sendBuffer;
-    std::mutex sendBufferMutex;
+    std::vector<BufferPtr> sendBufferTCP;
+    std::vector<BufferPtr> sendBufferUDP;
+    std::mutex sendBufferMutexTCP;
+    std::mutex sendBufferMutexUDP;
     sem_t sendBufferSemaphoreTCP;
     sem_t sendBufferSemaphoreUDP;
 

@@ -22,13 +22,7 @@
 #   define sem_timedwait(s, a)  dispatch_semaphore_wait(*s, dispatch_walltime(a, 0))
 #else
 #   include <semaphore.h>
-    struct sem_comparable_t : public sem_t
-    {
-        operator bool()
-        {
-            return true;
-        }
-    };
+    struct sem_comparable_t : public sem_t { operator bool() { return true; } };
 #   define sem_t                sem_comparable_t
 #endif
 
