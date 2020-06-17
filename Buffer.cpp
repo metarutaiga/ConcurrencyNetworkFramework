@@ -1,5 +1,5 @@
 //==============================================================================
-// ConcurrencyNetworkFramework : Event Header
+// ConcurrencyNetworkFramework : Buffer Header
 //
 // Copyright (c) 2020 TAiGA
 // https://github.com/metarutaiga/ConcurrencyNetworkFramework
@@ -11,7 +11,7 @@ static std::vector<Buffer> bufferPool;
 static std::mutex bufferPoolMutex;
 static bool bufferPoolTerminate;
 //------------------------------------------------------------------------------
-void Buffer::Recycle(Buffer::element_type* pointer)
+void Buffer::Recycle(element_type* pointer)
 {
     if (bufferPoolTerminate)
     {

@@ -1,5 +1,5 @@
 //==============================================================================
-// ConcurrencyNetworkFramework : Event Header
+// ConcurrencyNetworkFramework : Buffer Header
 //
 // Copyright (c) 2020 TAiGA
 // https://github.com/metarutaiga/ConcurrencyNetworkFramework
@@ -10,7 +10,7 @@
 
 class Buffer : public std::shared_ptr<std::vector<char>>
 {
-    static void Recycle(Buffer::element_type* pointer);
+    static void Recycle(element_type* pointer);
 
 public:
     static void Clean();
