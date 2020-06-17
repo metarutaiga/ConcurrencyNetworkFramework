@@ -20,7 +20,7 @@
 #define CONNECT_LOG(proto, level, format, ...) \
     Log::Format(level, "%s %d (%s:%s:%s@%s:%s) : " format, "Connect", thiz.socket ## proto, #proto, thiz.sourceAddress, thiz.sourcePort, thiz.destinationAddress, thiz.destinationPort, __VA_ARGS__)
 
-std::atomic_uint Connection::activeThreadCount;
+std::atomic_int Connection::activeThreadCount[4];
 //------------------------------------------------------------------------------
 Connection::Connection(int socket, const char* address, const char* port, const struct sockaddr_storage& addr)
 {
@@ -217,7 +217,7 @@ Connection::~Connection()
 //------------------------------------------------------------------------------
 void Connection::ProcedureRecvTCP()
 {
-    Connection::activeThreadCount.fetch_add(1, std::memory_order_acq_rel);
+    Connection::activeThreadCount[0].fetch_add(1, std::memory_order_acq_rel);
 
     BufferPtr::element_type buffer;
 
@@ -250,12 +250,12 @@ void Connection::ProcedureRecvTCP()
 
     thiz.terminate = true;
 
-    Connection::activeThreadCount.fetch_sub(1, std::memory_order_acq_rel);
+    Connection::activeThreadCount[0].fetch_sub(1, std::memory_order_acq_rel);
 }
 //------------------------------------------------------------------------------
 void Connection::ProcedureSendTCP()
 {
-    Connection::activeThreadCount.fetch_add(1, std::memory_order_acq_rel);
+    Connection::activeThreadCount[1].fetch_add(1, std::memory_order_acq_rel);
 
     char cork[Socket::CORK_SIZE] = {};
 
@@ -314,12 +314,12 @@ void Connection::ProcedureSendTCP()
 
     thiz.terminate = true;
 
-    Connection::activeThreadCount.fetch_sub(1, std::memory_order_acq_rel);
+    Connection::activeThreadCount[1].fetch_sub(1, std::memory_order_acq_rel);
 }
 //------------------------------------------------------------------------------
 void Connection::ProcedureRecvUDP()
 {
-    Connection::activeThreadCount.fetch_add(1, std::memory_order_acq_rel);
+    Connection::activeThreadCount[2].fetch_add(1, std::memory_order_acq_rel);
 
     BufferPtr::element_type buffer;
 
@@ -340,12 +340,12 @@ void Connection::ProcedureRecvUDP()
 
     thiz.terminate = true;
 
-    Connection::activeThreadCount.fetch_sub(1, std::memory_order_acq_rel);
+    Connection::activeThreadCount[2].fetch_sub(1, std::memory_order_acq_rel);
 }
 //------------------------------------------------------------------------------
 void Connection::ProcedureSendUDP()
 {
-    Connection::activeThreadCount.fetch_add(1, std::memory_order_acq_rel);
+    Connection::activeThreadCount[3].fetch_add(1, std::memory_order_acq_rel);
 
     char cork[Socket::CORK_SIZE] = {};
 
@@ -389,7 +389,7 @@ void Connection::ProcedureSendUDP()
 
     thiz.terminate = true;
 
-    Connection::activeThreadCount.fetch_sub(1, std::memory_order_acq_rel);
+    Connection::activeThreadCount[3].fetch_sub(1, std::memory_order_acq_rel);
 }
 //------------------------------------------------------------------------------
 bool Connection::ConnectTCP()
@@ -606,8 +606,10 @@ int Connection::SetAddressPort(struct sockaddr_storage& addr, const char* addres
     return 0;
 }
 //------------------------------------------------------------------------------
-unsigned int Connection::GetActiveThreadCount()
+int Connection::GetActiveThreadCount(int index)
 {
-    return Connection::activeThreadCount;
+    if (index < 0 || index > 4)
+        return 0;
+    return Connection::activeThreadCount[index];
 }
 //------------------------------------------------------------------------------

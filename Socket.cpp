@@ -54,7 +54,7 @@ ssize_t Socket::sendloopcork(int socket, const void* buf, size_t len, int flags,
 {
     struct CORK
     {
-        int length;
+        unsigned int length;
         char buffer[Socket::CORK_SIZE - sizeof(int)];
     };
     CORK& cork = *(CORK*)corkbuf;
@@ -63,7 +63,7 @@ ssize_t Socket::sendloopcork(int socket, const void* buf, size_t len, int flags,
     {
         if (len + cork.length > sizeof(cork.buffer))
         {
-            int length = cork.length;
+            unsigned int length = cork.length;
             cork.length = 0;
             ssize_t result = sendloopcork(socket, cork.buffer, length, flags & ~MSG_MORE, corkbuf);
             if (result < 0)

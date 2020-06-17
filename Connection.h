@@ -10,7 +10,6 @@
 
 typedef std::shared_ptr<std::vector<char>> BufferPtr;
 
-class Listener;
 class Connection
 {
 protected:
@@ -38,7 +37,7 @@ protected:
     pthread_t threadRecvUDP;
     pthread_t threadSendUDP;
 
-    static std::atomic_uint activeThreadCount;
+    static std::atomic_int activeThreadCount[4];
 
 protected:
     virtual void ProcedureRecvTCP();
@@ -63,5 +62,5 @@ public:
 
     static void GetAddressPort(const struct sockaddr_storage& addr, char*& address, char*& port);
     static int SetAddressPort(struct sockaddr_storage& addr, const char* address, const char* port);
-    static unsigned int GetActiveThreadCount();
+    static int GetActiveThreadCount(int index);
 };
