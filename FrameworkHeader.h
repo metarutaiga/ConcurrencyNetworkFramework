@@ -10,12 +10,20 @@
 #   include "config.h"
 #endif
 
-#include <atomic>
-#include <memory>
-#include <mutex>
-#include <vector>
+#include <sys/errno.h>
+#undef errno
+static inline int& errno()
+{
+#if defined(__ANDROID__)
+    return (*__errno());
+#elif defined(__APPLE__)
+    return (*__error());
+#else
+    return ::errno;
+#endif
+}
+#define errno errno()
 
-#include <pthread.h>
 #if defined(__APPLE__)
 #   include <dispatch/dispatch.h>
 #   define sem_t                dispatch_semaphore_t
@@ -30,19 +38,28 @@
 #   define sem_t                sem_comparable_t
 #endif
 
-#include <sys/errno.h>
-#undef errno
-static inline int errno()
+#include <pthread.h>
+#if _LIBCPP_VERSION
+#   include <__threading_support>
+#   define __libcpp_thread_create __libcpp_thread_create_with_stack
+#   include <thread>
+_LIBCPP_BEGIN_NAMESPACE_STD
+static inline int __libcpp_thread_create_with_stack(__libcpp_thread_t *__t, void *(*__func)(void *), void *__arg)
 {
-#if defined(__ANDROID__)
-    return (*__errno());
-#elif defined(__APPLE__)
-    return (*__error());
-#else
-    return ::errno;
-#endif
+    pthread_attr_t attr;
+    ::pthread_attr_init(&attr);
+    ::pthread_attr_setstacksize(&attr, 65536);
+    int result = ::pthread_create(__t, 0, __func, __arg);
+    ::pthread_attr_destroy(&attr);
+    return result;
 }
-#define errno errno()
+_LIBCPP_END_NAMESPACE_STD
+#endif
+
+#include <atomic>
+#include <memory>
+#include <mutex>
+#include <vector>
 
 #ifndef MSG_NOSIGNAL
 #   define MSG_NOSIGNAL 0

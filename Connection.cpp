@@ -14,7 +14,7 @@
 #include "Socket.h"
 #include "Connection.h"
 
-#define TIMED_SEMAPHORE 1
+#define TIMED_SEMAPHORE 0
 #define UDP_MAX_SIZE    1280
 
 #define CONNECT_LOG(proto, level, format, ...) \
@@ -36,10 +36,10 @@ Connection::Connection(int socket, const char* address, const char* port, const 
     thiz.sourcePort = port ? ::strdup(port) : nullptr;
     thiz.destinationAddress = nullptr;
     thiz.destinationPort = nullptr;
-    thiz.threadRecvTCP = pthread_t();
-    thiz.threadSendTCP = pthread_t();
-    thiz.threadRecvUDP = pthread_t();
-    thiz.threadSendUDP = pthread_t();
+    thiz.threadRecvTCP = nullptr;
+    thiz.threadSendTCP = nullptr;
+    thiz.threadRecvUDP = nullptr;
+    thiz.threadSendUDP = nullptr;
 
     if (::sem_init(&thiz.sendBufferSemaphoreTCP, 0, 0) < 0)
     {
@@ -67,10 +67,10 @@ Connection::Connection(const char* address, const char* port)
     thiz.sourcePort = nullptr;
     thiz.destinationAddress = address ? ::strdup(address) : nullptr;
     thiz.destinationPort = port ? ::strdup(port) : nullptr;
-    thiz.threadRecvTCP = pthread_t();
-    thiz.threadSendTCP = pthread_t();
-    thiz.threadRecvUDP = pthread_t();
-    thiz.threadSendUDP = pthread_t();
+    thiz.threadRecvTCP = nullptr;
+    thiz.threadSendTCP = nullptr;
+    thiz.threadRecvUDP = nullptr;
+    thiz.threadSendUDP = nullptr;
 
     if (::sem_init(&thiz.sendBufferSemaphoreTCP, 0, 0) < 0)
     {
@@ -141,7 +141,7 @@ Connection::~Connection()
             CONNECT_LOG(TCP, -1, "%s %s", "sem_post", strerror(errno));
         }
 #else
-        while (::sem_post(&thiz.sendBufferSemaphore) < 0)
+        while (::sem_post(&thiz.sendBufferSemaphoreTCP) < 0)
         {
             struct timespec timespec;
             timespec.tv_sec = 0;
@@ -169,23 +169,27 @@ Connection::~Connection()
     }
     if (thiz.threadRecvTCP)
     {
-        ::pthread_join(thiz.threadRecvTCP, nullptr);
-        thiz.threadRecvTCP = pthread_t();
+        thiz.threadRecvTCP->join();
+        delete threadRecvTCP;
+        thiz.threadRecvTCP = nullptr;
     }
     if (thiz.threadSendTCP)
     {
-        ::pthread_join(thiz.threadSendTCP, nullptr);
-        thiz.threadSendTCP = pthread_t();
+        thiz.threadSendTCP->join();
+        delete threadSendTCP;
+        thiz.threadSendTCP = nullptr;
     }
     if (thiz.threadRecvUDP)
     {
-        ::pthread_join(thiz.threadRecvUDP, nullptr);
-        thiz.threadRecvUDP = pthread_t();
+        thiz.threadRecvUDP->join();
+        delete threadRecvUDP;
+        thiz.threadRecvUDP = nullptr;
     }
     if (thiz.threadSendUDP)
     {
-        ::pthread_join(thiz.threadSendUDP, nullptr);
-        thiz.threadSendUDP = pthread_t();
+        thiz.threadSendUDP->join();
+        delete threadSendUDP;
+        thiz.threadSendUDP = nullptr;
     }
     if (thiz.socketTCP > 0)
     {
@@ -427,25 +431,9 @@ bool Connection::ConnectTCP()
     Socket::setsockopt(thiz.socketTCP, SOL_SOCKET, SO_KEEPALIVE, (void*)&enable, sizeof(enable));
     Socket::setsockopt(thiz.socketTCP, SOL_TCP, TCP_NODELAY, (void*)&enable, sizeof(enable));
 
-    pthread_attr_t attr;
-    ::pthread_attr_init(&attr);
-    ::pthread_attr_setstacksize(&attr, 65536);
-
-    ::pthread_create(&thiz.threadRecvTCP, &attr, [](void* arg) -> void*
-    {
-        Connection& connect = *(Connection*)arg;
-        connect.ProcedureRecvTCP();
-        return nullptr;
-    }, this);
-    ::pthread_create(&thiz.threadSendTCP, &attr, [](void* arg) -> void*
-    {
-        Connection& connect = *(Connection*)arg;
-        connect.ProcedureSendTCP();
-        return nullptr;
-    }, this);
-
-    ::pthread_attr_destroy(&attr);
-    if (thiz.threadRecvTCP == pthread_t() || thiz.threadSendTCP == pthread_t())
+    thiz.threadRecvTCP = new std::thread([this]{ thiz.ProcedureRecvTCP(); });
+    thiz.threadSendTCP = new std::thread([this]{ thiz.ProcedureSendTCP(); });
+    if (thiz.threadRecvTCP == nullptr || thiz.threadSendTCP == nullptr)
     {
         CONNECT_LOG(TCP, -1, "%s %s", "thread", ::strerror(errno));
         return false;
@@ -496,25 +484,9 @@ bool Connection::ConnectUDP()
         return false;
     }
 
-    pthread_attr_t attr;
-    ::pthread_attr_init(&attr);
-    ::pthread_attr_setstacksize(&attr, 65536);
-
-    ::pthread_create(&thiz.threadRecvUDP, &attr, [](void* arg) -> void*
-    {
-        Connection& connect = *(Connection*)arg;
-        connect.ProcedureRecvUDP();
-        return nullptr;
-    }, this);
-    ::pthread_create(&thiz.threadSendUDP, &attr, [](void* arg) -> void*
-    {
-        Connection& connect = *(Connection*)arg;
-        connect.ProcedureSendUDP();
-        return nullptr;
-    }, this);
-
-    ::pthread_attr_destroy(&attr);
-    if (thiz.threadRecvUDP == pthread_t() || thiz.threadSendUDP == pthread_t())
+    thiz.threadRecvUDP = new std::thread([this]{ thiz.ProcedureRecvUDP(); });
+    thiz.threadSendUDP = new std::thread([this]{ thiz.ProcedureSendUDP(); });
+    if (thiz.threadRecvUDP == nullptr || thiz.threadSendUDP == nullptr)
     {
         CONNECT_LOG(UDP, -1, "%s %s", "thread", ::strerror(errno));
         return false;
@@ -531,20 +503,7 @@ bool Connection::Alive()
 //------------------------------------------------------------------------------
 void Connection::Disconnect()
 {
-    pthread_attr_t attr;
-    ::pthread_attr_init(&attr);
-    ::pthread_attr_setstacksize(&attr, 65536);
-    ::pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-
-    pthread_t thread = pthread_t();
-    ::pthread_create(&thread, &attr, [](void* arg) -> void*
-    {
-        Connection& connect = *(Connection*)arg;
-        delete &connect;
-        return nullptr;
-    }, this);
-
-    ::pthread_attr_destroy(&attr);
+    std::thread([this]{ delete this; }).detach();
 }
 //------------------------------------------------------------------------------
 void Connection::Send(const Buffer& buffer)

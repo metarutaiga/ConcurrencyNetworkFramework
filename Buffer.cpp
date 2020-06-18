@@ -37,13 +37,16 @@ void Buffer::Clean()
 Buffer Buffer::Get(size_t size)
 {
     Buffer buffer;
-    bufferPoolMutex.lock();
     if (bufferPool.empty() == false)
     {
-        bufferPool.back().swap(buffer);
-        bufferPool.pop_back();
+        bufferPoolMutex.lock();
+        if (bufferPool.empty() == false)
+        {
+            bufferPool.back().swap(buffer);
+            bufferPool.pop_back();
+        }
+        bufferPoolMutex.unlock();
     }
-    bufferPoolMutex.unlock();
     Buffer::element_type* pointer = buffer.get();
     if (pointer == nullptr)
     {

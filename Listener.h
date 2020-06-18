@@ -18,7 +18,7 @@ protected:
     int backlog;
     char* address;
     char* port;
-    pthread_t threadListen;
+    std::thread* threadListen;
 
     std::vector<Connection*> connectionArray;
     std::mutex connectionMutex;

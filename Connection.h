@@ -31,10 +31,10 @@ protected:
     char* destinationAddress;
     char* destinationPort;
 
-    pthread_t threadRecvTCP;
-    pthread_t threadSendTCP;
-    pthread_t threadRecvUDP;
-    pthread_t threadSendUDP;
+    std::thread* threadRecvTCP;
+    std::thread* threadSendTCP;
+    std::thread* threadRecvUDP;
+    std::thread* threadSendUDP;
 
     static std::atomic_int activeThreadCount[4];
 

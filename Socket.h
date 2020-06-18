@@ -22,7 +22,7 @@ public:
     static int (*bind)(int socket, const struct sockaddr* name, socklen_t namelen);
     static int (*connect)(int socket, const struct sockaddr* name, socklen_t namelen);
     static int (*close)(int socket);
-    static int (*errno)();
+    static int& (*errno)();
     static int (*getpeername)(int socket, struct sockaddr* name, socklen_t* namelen);
     static int (*getsockname)(int socket, struct sockaddr* name, socklen_t* namelen);
     static int (*getsockopt)(int socket, int level, int optname, void* optval, socklen_t* optlen);

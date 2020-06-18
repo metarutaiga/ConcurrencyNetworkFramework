@@ -24,7 +24,7 @@ Listener::Listener(const char* address, const char* port, int backlog)
     thiz.backlog = backlog;
     thiz.address = address ? ::strdup(address) : nullptr;
     thiz.port = port ? ::strdup(port) : ::strdup("7777");
-    thiz.threadListen = pthread_t();
+    thiz.threadListen = nullptr;
 #if defined(__APPLE__)
     signal(SIGPIPE, SIG_IGN);
 #endif
@@ -143,19 +143,8 @@ bool Listener::Start()
         return false;
     }
 
-    pthread_attr_t attr;
-    ::pthread_attr_init(&attr);
-    ::pthread_attr_setstacksize(&attr, 65536);
-
-    ::pthread_create(&thiz.threadListen, &attr, [](void* arg) -> void*
-    {
-        Listener& listen = *(Listener*)arg;
-        listen.ProcedureListen();
-        return nullptr;
-    }, this);
-
-    ::pthread_attr_destroy(&attr);
-    if (thiz.threadListen == pthread_t())
+    thiz.threadListen = new std::thread([this]{ thiz.ProcedureListen(); });
+    if (thiz.threadListen == nullptr)
     {
         LISTEN_LOG(-1, "%s %s", "thread", ::strerror(errno));
         return false;
@@ -176,8 +165,9 @@ void Listener::Stop()
     }
     if (thiz.threadListen)
     {
-        ::pthread_join(thiz.threadListen, nullptr);
-        thiz.threadListen = pthread_t();
+        thiz.threadListen->join();
+        delete thiz.threadListen;
+        thiz.threadListen = nullptr;
     }
 
     std::vector<Connection*> connectionLocal;
