@@ -32,8 +32,8 @@ Connection::Connection(int socket, const char* address, const char* port, const 
     thiz.readyUDP = false;
     thiz.sendBufferSemaphoreTCP = sem_t();
     thiz.sendBufferSemaphoreUDP = sem_t();
-    thiz.sourceAddress = address ? strdup(address) : nullptr;
-    thiz.sourcePort = port ? strdup(port) : nullptr;
+    thiz.sourceAddress = address ? ::strdup(address) : nullptr;
+    thiz.sourcePort = port ? ::strdup(port) : nullptr;
     thiz.destinationAddress = nullptr;
     thiz.destinationPort = nullptr;
     thiz.threadRecvTCP = pthread_t();
@@ -41,8 +41,14 @@ Connection::Connection(int socket, const char* address, const char* port, const 
     thiz.threadRecvUDP = pthread_t();
     thiz.threadSendUDP = pthread_t();
 
-    sem_init(&thiz.sendBufferSemaphoreTCP, 0, 0);
-    sem_init(&thiz.sendBufferSemaphoreUDP, 0, 0);
+    if (::sem_init(&thiz.sendBufferSemaphoreTCP, 0, 0) < 0)
+    {
+        CONNECT_LOG(TCP, -1, "%s %s", "sem_init", strerror(errno));
+    }
+    if (::sem_init(&thiz.sendBufferSemaphoreUDP, 0, 0) < 0)
+    {
+        CONNECT_LOG(UDP, -1, "%s %s", "sem_init", strerror(errno));
+    }
 
     GetAddressPort(addr, thiz.destinationAddress, thiz.destinationPort);
 }
@@ -59,15 +65,21 @@ Connection::Connection(const char* address, const char* port)
     thiz.sendBufferSemaphoreUDP = sem_t();
     thiz.sourceAddress = nullptr;
     thiz.sourcePort = nullptr;
-    thiz.destinationAddress = address ? strdup(address) : nullptr;
-    thiz.destinationPort = port ? strdup(port) : nullptr;
+    thiz.destinationAddress = address ? ::strdup(address) : nullptr;
+    thiz.destinationPort = port ? ::strdup(port) : nullptr;
     thiz.threadRecvTCP = pthread_t();
     thiz.threadSendTCP = pthread_t();
     thiz.threadRecvUDP = pthread_t();
     thiz.threadSendUDP = pthread_t();
 
-    sem_init(&thiz.sendBufferSemaphoreTCP, 0, 0);
-    sem_init(&thiz.sendBufferSemaphoreUDP, 0, 0);
+    if (::sem_init(&thiz.sendBufferSemaphoreTCP, 0, 0) < 0)
+    {
+        CONNECT_LOG(TCP, -1, "%s %s", "sem_init", strerror(errno));
+    }
+    if (::sem_init(&thiz.sendBufferSemaphoreUDP, 0, 0) < 0)
+    {
+        CONNECT_LOG(UDP, -1, "%s %s", "sem_init", strerror(errno));
+    }
 
     struct addrinfo* addrinfo = nullptr;
     struct addrinfo hints = {};
@@ -77,7 +89,7 @@ Connection::Connection(const char* address, const char* port)
     int error = ::getaddrinfo(thiz.destinationAddress, thiz.destinationPort, &hints, &addrinfo);
     if (addrinfo == nullptr)
     {
-        CONNECT_LOG(TCP, -1, "%s %s", "getaddrinfo", gai_strerror(error));
+        CONNECT_LOG(TCP, -1, "%s %s", "getaddrinfo", ::gai_strerror(error));
         return;
     }
 
@@ -92,6 +104,8 @@ Connection::Connection(const char* address, const char* port)
     if (Socket::connect(thiz.socketTCP, addrinfo->ai_addr, addrinfo->ai_addrlen) < 0)
     {
         CONNECT_LOG(TCP, -1, "%s %s", "connect", Socket::strerror(Socket::errno));
+        Socket::close(thiz.socketTCP);
+        thiz.socketTCP = 0;
         ::freeaddrinfo(addrinfo);
         return;
     }
@@ -122,34 +136,34 @@ Connection::~Connection()
     if (thiz.sendBufferSemaphoreTCP)
     {
 #if TIMED_SEMAPHORE
-        if (sem_post(&thiz.sendBufferSemaphoreTCP) < 0)
+        if (::sem_post(&thiz.sendBufferSemaphoreTCP) < 0)
         {
             CONNECT_LOG(TCP, -1, "%s %s", "sem_post", strerror(errno));
         }
 #else
-        while (sem_post(&thiz.sendBufferSemaphore) < 0)
+        while (::sem_post(&thiz.sendBufferSemaphore) < 0)
         {
             struct timespec timespec;
             timespec.tv_sec = 0;
             timespec.tv_nsec = 1000 * 1000 * 1000 / 60;
-            nanosleep(&timespec, nullptr);
+            ::nanosleep(&timespec, nullptr);
         }
 #endif
     }
     if (thiz.sendBufferSemaphoreUDP)
     {
 #if TIMED_SEMAPHORE
-        if (sem_post(&thiz.sendBufferSemaphoreUDP) < 0)
+        if (::sem_post(&thiz.sendBufferSemaphoreUDP) < 0)
         {
             CONNECT_LOG(TCP, -1, "%s %s", "sem_post", strerror(errno));
         }
 #else
-        while (sem_post(&thiz.sendBufferSemaphoreUDP) < 0)
+        while (::sem_post(&thiz.sendBufferSemaphoreUDP) < 0)
         {
             struct timespec timespec;
             timespec.tv_sec = 0;
             timespec.tv_nsec = 1000 * 1000 * 1000 / 60;
-            nanosleep(&timespec, nullptr);
+            ::nanosleep(&timespec, nullptr);
         }
 #endif
     }
@@ -185,32 +199,32 @@ Connection::~Connection()
     }
     if (thiz.sendBufferSemaphoreTCP)
     {
-        sem_destroy(&thiz.sendBufferSemaphoreTCP);
+        ::sem_destroy(&thiz.sendBufferSemaphoreTCP);
         thiz.sendBufferSemaphoreTCP = sem_t();
     }
     if (thiz.sendBufferSemaphoreUDP)
     {
-        sem_destroy(&thiz.sendBufferSemaphoreUDP);
+        ::sem_destroy(&thiz.sendBufferSemaphoreUDP);
         thiz.sendBufferSemaphoreUDP = sem_t();
     }
     if (thiz.sourceAddress)
     {
-        free(thiz.sourceAddress);
+        ::free(thiz.sourceAddress);
         thiz.sourceAddress = nullptr;
     }
     if (thiz.sourcePort)
     {
-        free(thiz.sourcePort);
+        ::free(thiz.sourcePort);
         thiz.sourcePort = nullptr;
     }
     if (thiz.destinationAddress)
     {
-        free(thiz.destinationAddress);
+        ::free(thiz.destinationAddress);
         thiz.destinationAddress = nullptr;
     }
     if (thiz.destinationPort)
     {
-        free(thiz.destinationPort);
+        ::free(thiz.destinationPort);
         thiz.destinationPort = nullptr;
     }
 }
@@ -242,12 +256,13 @@ void Connection::ProcedureRecvTCP()
         buffer.resize(size);
         if (Socket::recv(thiz.socketTCP, &buffer.front(), size, MSG_WAITALL | MSG_NOSIGNAL) <= 0)
         {
-            CONNECT_LOG(TCP, -1, "%s %s", "recv", strerror(Socket::errno));
+            CONNECT_LOG(TCP, -1, "%s %s", "recv", Socket::strerror(Socket::errno));
             break;
         }
         Recv(buffer);
     }
 
+    thiz.readyTCP = false;
     thiz.terminate = true;
 
     Connection::activeThreadCount[0].fetch_sub(1, std::memory_order_acq_rel);
@@ -296,22 +311,27 @@ void Connection::ProcedureSendTCP()
                     break;
                 }
             }
+            else
+            {
+                CONNECT_LOG(TCP, -1, "%s %s %zd", "send", "buffer too long", buffer.size());
+            }
         }
         if (thiz.sendBufferTCP.empty() == false)
             continue;
 
 #if TIMED_SEMAPHORE
         struct timeval timeval;
-        gettimeofday(&timeval, nullptr);
+        ::gettimeofday(&timeval, nullptr);
         struct timespec timespec;
         timespec.tv_sec = timeval.tv_sec + 10;
         timespec.tv_nsec = timeval.tv_usec * 1000;
-        sem_timedwait(&thiz.sendBufferSemaphoreTCP, &timespec);
+        ::sem_timedwait(&thiz.sendBufferSemaphoreTCP, &timespec);
 #else
-        sem_wait(&thiz.sendBufferSemaphoreTCP);
+        ::sem_wait(&thiz.sendBufferSemaphoreTCP);
 #endif
     }
 
+    thiz.readyTCP = false;
     thiz.terminate = true;
 
     Connection::activeThreadCount[1].fetch_sub(1, std::memory_order_acq_rel);
@@ -331,14 +351,14 @@ void Connection::ProcedureRecvUDP()
         long size = Socket::recv(thiz.socketUDP, &buffer.front(), buffer.size(), MSG_WAITALL | MSG_NOSIGNAL);
         if (size <= 0)
         {
-            CONNECT_LOG(UDP, -1, "%s %s", "recv", strerror(Socket::errno));
+            CONNECT_LOG(UDP, -1, "%s %s", "recv", Socket::strerror(Socket::errno));
             break;
         }
         buffer.resize(size);
         Recv(buffer);
     }
 
-    thiz.terminate = true;
+    thiz.readyUDP = false;
 
     Connection::activeThreadCount[2].fetch_sub(1, std::memory_order_acq_rel);
 }
@@ -371,23 +391,27 @@ void Connection::ProcedureSendUDP()
                     break;
                 }
             }
+            else
+            {
+                CONNECT_LOG(UDP, -1, "%s %s %zd", "send", "buffer too long", buffer.size());
+            }
         }
         if (thiz.sendBufferUDP.empty() == false)
             continue;
 
 #if TIMED_SEMAPHORE
         struct timeval timeval;
-        gettimeofday(&timeval, nullptr);
+        ::gettimeofday(&timeval, nullptr);
         struct timespec timespec;
         timespec.tv_sec = timeval.tv_sec + 10;
         timespec.tv_nsec = timeval.tv_usec * 1000;
-        sem_timedwait(&thiz.sendBufferSemaphoreUDP, &timespec);
+        ::sem_timedwait(&thiz.sendBufferSemaphoreUDP, &timespec);
 #else
-        sem_wait(&thiz.sendBufferSemaphoreUDP);
+        ::sem_wait(&thiz.sendBufferSemaphoreUDP);
 #endif
     }
 
-    thiz.terminate = true;
+    thiz.readyUDP = false;
 
     Connection::activeThreadCount[3].fetch_sub(1, std::memory_order_acq_rel);
 }
@@ -423,7 +447,7 @@ bool Connection::ConnectTCP()
     ::pthread_attr_destroy(&attr);
     if (thiz.threadRecvTCP == pthread_t() || thiz.threadSendTCP == pthread_t())
     {
-        CONNECT_LOG(TCP, -1, "%s %s", "thread", strerror(errno));
+        CONNECT_LOG(TCP, -1, "%s %s", "thread", ::strerror(errno));
         return false;
     }
 
@@ -459,12 +483,16 @@ bool Connection::ConnectUDP()
     if (Socket::bind(thiz.socketUDP, (struct sockaddr*)&sockaddrSource, sockaddSourceLength) < 0)
     {
         CONNECT_LOG(UDP, -1, "%s %s", "bind", Socket::strerror(Socket::errno));
+        Socket::close(thiz.socketUDP);
+        thiz.socketUDP = 0;
         return false;
     }
 
     if (Socket::connect(thiz.socketUDP, (struct sockaddr*)&sockaddrDestination, sockaddrDestinationLength) < 0)
     {
         CONNECT_LOG(UDP, -1, "%s %s", "connect", Socket::strerror(Socket::errno));
+        Socket::close(thiz.socketUDP);
+        thiz.socketUDP = 0;
         return false;
     }
 
@@ -488,7 +516,7 @@ bool Connection::ConnectUDP()
     ::pthread_attr_destroy(&attr);
     if (thiz.threadRecvUDP == pthread_t() || thiz.threadSendUDP == pthread_t())
     {
-        CONNECT_LOG(UDP, -1, "%s %s", "thread", strerror(errno));
+        CONNECT_LOG(UDP, -1, "%s %s", "thread", ::strerror(errno));
         return false;
     }
 
@@ -526,9 +554,9 @@ void Connection::Send(const Buffer& buffer)
         thiz.sendBufferMutexUDP.lock();
         thiz.sendBufferUDP.emplace_back(buffer);
         thiz.sendBufferMutexUDP.unlock();
-        if (sem_post(&thiz.sendBufferSemaphoreUDP) < 0)
+        if (::sem_post(&thiz.sendBufferSemaphoreUDP) < 0)
         {
-            CONNECT_LOG(UDP, -1, "%s %s", "sem_post", strerror(errno));
+            CONNECT_LOG(UDP, -1, "%s %s", "sem_post", ::strerror(errno));
         }
     }
     else if (thiz.readyTCP)
@@ -536,9 +564,9 @@ void Connection::Send(const Buffer& buffer)
         thiz.sendBufferMutexTCP.lock();
         thiz.sendBufferTCP.emplace_back(buffer);
         thiz.sendBufferMutexTCP.unlock();
-        if (sem_post(&thiz.sendBufferSemaphoreTCP) < 0)
+        if (::sem_post(&thiz.sendBufferSemaphoreTCP) < 0)
         {
-            CONNECT_LOG(TCP, -1, "%s %s", "sem_post", strerror(errno));
+            CONNECT_LOG(TCP, -1, "%s %s", "sem_post", ::strerror(errno));
         }
     }
 }
@@ -554,21 +582,21 @@ void Connection::GetAddressPort(const struct sockaddr_storage& addr, char*& addr
     {
         sockaddr_in& sa = *(sockaddr_in*)&addr;
 
-        address = (char*)realloc(address, INET_ADDRSTRLEN);
-        inet_ntop(AF_INET, &sa.sin_addr, address, INET_ADDRSTRLEN);
+        address = (char*)::realloc(address, INET_ADDRSTRLEN);
+        ::inet_ntop(AF_INET, &sa.sin_addr, address, INET_ADDRSTRLEN);
 
-        port = (char*)realloc(port, 8);
-        snprintf(port, 8, "%u", ntohs(sa.sin_port));
+        port = (char*)::realloc(port, 8);
+        ::snprintf(port, 8, "%u", ntohs(sa.sin_port));
     }
     else if (addr.ss_family == AF_INET6)
     {
         sockaddr_in6& sa = *(sockaddr_in6*)&addr;
 
-        address = (char*)realloc(address, INET6_ADDRSTRLEN);
-        inet_ntop(AF_INET6, &sa.sin6_addr, address, INET6_ADDRSTRLEN);
+        address = (char*)::realloc(address, INET6_ADDRSTRLEN);
+        ::inet_ntop(AF_INET6, &sa.sin6_addr, address, INET6_ADDRSTRLEN);
 
-        port = (char*)realloc(port, 8);
-        snprintf(port, 8, "%u", ntohs(sa.sin6_port));
+        port = (char*)::realloc(port, 8);
+        ::snprintf(port, 8, "%u", ntohs(sa.sin6_port));
     }
 }
 //------------------------------------------------------------------------------
@@ -583,8 +611,8 @@ int Connection::SetAddressPort(struct sockaddr_storage& addr, const char* addres
         sa.sin_len = sizeof(sockaddr_in);
 #endif
         sa.sin_family = AF_INET;
-        sa.sin_port = htons(atoi(port));
-        inet_pton(AF_INET, address, &sa.sin_addr);
+        sa.sin_port = htons(::atoi(port));
+        ::inet_pton(AF_INET, address, &sa.sin_addr);
 
         return sizeof(sockaddr_in);
     }
@@ -597,8 +625,8 @@ int Connection::SetAddressPort(struct sockaddr_storage& addr, const char* addres
         sa.sin6_len = sizeof(sockaddr_in6);
 #endif
         sa.sin6_family = AF_INET6;
-        sa.sin6_port = htons(atoi(port));
-        inet_pton(AF_INET6, address, &sa.sin6_addr);
+        sa.sin6_port = htons(::atoi(port));
+        ::inet_pton(AF_INET6, address, &sa.sin6_addr);
 
         return sizeof(sockaddr_in6);
     }

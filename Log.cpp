@@ -26,27 +26,27 @@ void Log::SetFormat(void(*format)(int, const char*, ...))
 //------------------------------------------------------------------------------
 void Log::DefaultOutput(int level, const char* output)
 {
-    printf("%s", output);
+    ::printf("%s", output);
 }
 //------------------------------------------------------------------------------
 void Log::DefaultFormat(int level, const char* format, ...)
 {
-    time_t now = time(0);
+    time_t now = ::time(0);
     struct tm tm;
-    gmtime_r(&now, &tm);
+    ::gmtime_r(&now, &tm);
 
     char timestamp[32];
-    strftime(timestamp, 32, "%Y-%m-%d %H:%M:%S", &tm);
+    ::strftime(timestamp, 32, "%Y-%m-%d %H:%M:%S", &tm);
 
     char replaceFormat[256];
     switch (level)
     {
     case -1:
-        snprintf(replaceFormat, 256, "%s [%s] %s\n", timestamp, "ERROR", format);
+        ::snprintf(replaceFormat, 256, "%s [%s] %s\n", timestamp, "ERROR", format);
         break;
 
     default:
-        snprintf(replaceFormat, 256, "%s [%s] %s\n", timestamp, "INFO", format);
+        ::snprintf(replaceFormat, 256, "%s [%s] %s\n", timestamp, "INFO", format);
         break;
     }
 
@@ -55,13 +55,13 @@ void Log::DefaultFormat(int level, const char* format, ...)
 
     va_list vaCount;
     va_copy(vaCount, va);
-    size_t count = vsnprintf(nullptr, 0, replaceFormat, vaCount);
+    size_t count = ::vsnprintf(nullptr, 0, replaceFormat, vaCount);
     va_end(vaCount);
 
     va_list vaOutput;
     va_copy(vaOutput, va);
     char* buffer = (char*)alloca(count + 1);
-    vsnprintf(buffer, count + 1, replaceFormat, vaOutput);
+    ::vsnprintf(buffer, count + 1, replaceFormat, vaOutput);
     Log::Output(level, buffer);
     va_end(vaOutput);
 

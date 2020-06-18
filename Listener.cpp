@@ -22,8 +22,8 @@ Listener::Listener(const char* address, const char* port, int backlog)
     thiz.terminate = false;
     thiz.socket = 0;
     thiz.backlog = backlog;
-    thiz.address = address ? strdup(address) : nullptr;
-    thiz.port = port ? strdup(port) : strdup("7777");
+    thiz.address = address ? ::strdup(address) : nullptr;
+    thiz.port = port ? ::strdup(port) : ::strdup("7777");
     thiz.threadListen = pthread_t();
 #if defined(__APPLE__)
     signal(SIGPIPE, SIG_IGN);
@@ -36,12 +36,12 @@ Listener::~Listener()
 
     if (thiz.address)
     {
-        free(thiz.address);
+        ::free(thiz.address);
         thiz.address = nullptr;
     }
     if (thiz.port)
     {
-        free(thiz.port);
+        ::free(thiz.port);
         thiz.port = nullptr;
     }
 }
@@ -50,32 +50,11 @@ void Listener::ProcedureListen()
 {
     std::vector<Connection*> connectionLocal;
 
-    auto accept = [this](int socket, struct sockaddr* addr, socklen_t* size)
-    {
-        int result = 0;
-        while (thiz.terminate == false)
-        {
-            result = Socket::accept(socket, addr, size);
-            if (result >= 0)
-                break;
-            if (Socket::errno == EAGAIN || Socket::errno == EWOULDBLOCK || Socket::errno == EINTR)
-            {
-                struct timespec timespec;
-                timespec.tv_sec = 0;
-                timespec.tv_nsec = 1000 * 1000 * 1000 / 60;
-                nanosleep(&timespec, nullptr);
-                continue;
-            }
-            break;
-        }
-        return result;
-    };
-
     while (thiz.terminate == false)
     {
         struct sockaddr_storage addr = {};
         socklen_t size = sizeof(addr);
-        int id = accept(thiz.socket, (struct sockaddr*)&addr, &size);
+        int id = Socket::accept(thiz.socket, (struct sockaddr*)&addr, &size);
         if (id <= 0)
         {
             LISTEN_LOG(-1, "%s %s", "accept", Socket::strerror(Socket::errno));
@@ -85,8 +64,8 @@ void Listener::ProcedureListen()
         char* port = nullptr;
         Connection::GetAddressPort(addr, address, port);
         LISTEN_LOG(0, "%s %d (%s:%s)", "accept", id, address, port);
-        free(address);
-        free(port);
+        ::free(address);
+        ::free(port);
 
         Connection* connection = CreateConnection(id, addr);
         if (connection == nullptr)
@@ -131,7 +110,7 @@ bool Listener::Start()
     int error = ::getaddrinfo(thiz.address, thiz.port, &hints, &addrinfo);
     if (addrinfo == nullptr)
     {
-        LISTEN_LOG(-1, "%s %s", "getaddrinfo", gai_strerror(error));
+        LISTEN_LOG(-1, "%s %s", "getaddrinfo", ::gai_strerror(error));
         return false;
     }
 
@@ -139,7 +118,7 @@ bool Listener::Start()
     if (thiz.socket <= 0)
     {
         LISTEN_LOG(-1, "%s %s", "socket", Socket::strerror(Socket::errno));
-        freeaddrinfo(addrinfo);
+        ::freeaddrinfo(addrinfo);
         return false;
     }
 
@@ -150,10 +129,10 @@ bool Listener::Start()
     if (Socket::bind(thiz.socket, addrinfo->ai_addr, addrinfo->ai_addrlen) != 0)
     {
         LISTEN_LOG(-1, "%s %s", "bind", Socket::strerror(Socket::errno));
-        freeaddrinfo(addrinfo);
+        ::freeaddrinfo(addrinfo);
         return false;
     }
-    freeaddrinfo(addrinfo);
+    ::freeaddrinfo(addrinfo);
 
     int fastOpen = 5;
     Socket::setsockopt(thiz.socket, SOL_TCP, TCP_FASTOPEN, &fastOpen, sizeof(fastOpen));
@@ -178,7 +157,7 @@ bool Listener::Start()
     ::pthread_attr_destroy(&attr);
     if (thiz.threadListen == pthread_t())
     {
-        LISTEN_LOG(-1, "%s %s", "thread", strerror(errno));
+        LISTEN_LOG(-1, "%s %s", "thread", ::strerror(errno));
         return false;
     }
 

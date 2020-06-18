@@ -30,6 +30,4 @@ public:
     virtual void Push(Event* event);
 
     virtual int Dispatch();
-
-    static Framework& Instance();
 };

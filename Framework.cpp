@@ -65,7 +65,7 @@ int Framework::Dispatch()
             struct timespec timespec;
             timespec.tv_sec = 0;
             timespec.tv_nsec = 1000 * 1000 * 1000 / 60;
-            nanosleep(&timespec, nullptr);
+            ::nanosleep(&timespec, nullptr);
             continue;
         }
         idleTime = 0;
@@ -100,11 +100,5 @@ int Framework::Dispatch()
 
     Log::Format(0, "Framework : Terminate");
     return 0;
-}
-//------------------------------------------------------------------------------
-Framework& Framework::Instance()
-{
-    static Framework framework;
-    return framework;
 }
 //------------------------------------------------------------------------------

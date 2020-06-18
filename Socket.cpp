@@ -11,7 +11,7 @@
 //------------------------------------------------------------------------------
 #undef errno
 //------------------------------------------------------------------------------
-int (*Socket::accept)(int socket, struct sockaddr* addr, socklen_t* addrlen) = ::accept;
+int (*Socket::accept)(int socket, struct sockaddr* addr, socklen_t* addrlen) = acceptloop;
 int (*Socket::bind)(int socket, const struct sockaddr* name, socklen_t namelen) = ::bind;
 int (*Socket::connect)(int socket, const struct sockaddr* name, socklen_t namelen) = ::connect;
 int (*Socket::close)(int socket) = ::close;
@@ -29,6 +29,27 @@ char* (*Socket::strerror)(int errnum) = ::strerror;
 //------------------------------------------------------------------------------
 #define errno errno()
 //------------------------------------------------------------------------------
+int Socket::acceptloop(int socket, struct sockaddr* addr, socklen_t* addrlen)
+{
+    int result = 0;
+    for (;;)
+    {
+        result = ::accept(socket, addr, addrlen);
+        if (result >= 0)
+            break;
+        if (Socket::errno == EAGAIN || Socket::errno == EWOULDBLOCK || Socket::errno == EINTR)
+        {
+            struct timespec timespec;
+            timespec.tv_sec = 0;
+            timespec.tv_nsec = 1000 * 1000 * 1000 / 60;
+            ::nanosleep(&timespec, nullptr);
+            continue;
+        }
+        break;
+    }
+    return result;
+}
+//------------------------------------------------------------------------------
 ssize_t Socket::recvloop(int socket, void* buf, size_t len, int flags)
 {
     ssize_t result = 0;
@@ -42,7 +63,7 @@ ssize_t Socket::recvloop(int socket, void* buf, size_t len, int flags)
             struct timespec timespec;
             timespec.tv_sec = 0;
             timespec.tv_nsec = 1000 * 1000 * 1000 / 60;
-            nanosleep(&timespec, nullptr);
+            ::nanosleep(&timespec, nullptr);
             continue;
         }
         break;
@@ -71,7 +92,7 @@ ssize_t Socket::sendloopcork(int socket, const void* buf, size_t len, int flags,
         }
         else
         {
-            memcpy(&cork.buffer[cork.length], buf, len);
+            ::memcpy(&cork.buffer[cork.length], buf, len);
             cork.length += len;
             if (flags & MSG_MORE)
                 return len;
@@ -93,7 +114,7 @@ ssize_t Socket::sendloopcork(int socket, const void* buf, size_t len, int flags,
             struct timespec timespec;
             timespec.tv_sec = 0;
             timespec.tv_nsec = 1000 * 1000 * 1000 / 60;
-            nanosleep(&timespec, nullptr);
+            ::nanosleep(&timespec, nullptr);
             continue;
         }
         break;
