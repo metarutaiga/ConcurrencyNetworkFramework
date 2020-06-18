@@ -498,7 +498,7 @@ bool Connection::ConnectUDP()
 //------------------------------------------------------------------------------
 bool Connection::Alive()
 {
-    return (terminate == false);
+    return (thiz.terminate == false);
 }
 //------------------------------------------------------------------------------
 void Connection::Disconnect()

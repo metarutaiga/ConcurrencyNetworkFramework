@@ -38,7 +38,6 @@ static inline int& errno()
 #   define sem_t                sem_comparable_t
 #endif
 
-#include <pthread.h>
 #if _LIBCPP_VERSION
 #   include <__threading_support>
 #   define __libcpp_thread_create __libcpp_thread_create_with_stack

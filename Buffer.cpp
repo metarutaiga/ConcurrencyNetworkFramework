@@ -4,7 +4,6 @@
 // Copyright (c) 2020 TAiGA
 // https://github.com/metarutaiga/ConcurrencyNetworkFramework
 //==============================================================================
-#include "FrameworkHeader.h"
 #include "Buffer.h"
 
 static std::vector<Buffer> bufferPool;
