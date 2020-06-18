@@ -43,6 +43,7 @@ static inline int& errno()
 #   include <__threading_support>
 #   define __libcpp_thread_create __libcpp_thread_create_with_stack
 #   include <thread>
+#   undef __libcpp_thread_create
 _LIBCPP_BEGIN_NAMESPACE_STD
 static inline int __libcpp_thread_create_with_stack(__libcpp_thread_t *__t, void *(*__func)(void *), void *__arg)
 {
