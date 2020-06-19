@@ -55,7 +55,7 @@ void Listener::ProcedureListen()
         struct sockaddr_storage addr = {};
         socklen_t size = sizeof(addr);
         int id = Socket::accept(thiz.socket, (struct sockaddr*)&addr, &size);
-        if (id <= 0)
+        if (id <= 0 || thiz.terminate)
         {
             LISTEN_LOG(-1, "%s %s", "accept", Socket::strerror(Socket::errno));
             break;
@@ -160,6 +160,7 @@ void Listener::Stop()
 
     if (thiz.socket > 0)
     {
+        Socket::shutdown(thiz.socket, SHUT_RD);
         Socket::close(thiz.socket);
         thiz.socket = 0;
     }
