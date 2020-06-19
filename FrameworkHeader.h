@@ -32,19 +32,40 @@ static inline int& errno()
 
 #if _LIBCPP_VERSION
 #   include <__threading_support>
+    _LIBCPP_BEGIN_NAMESPACE_STD
+    static inline size_t __libcpp_thread_setstacksize(size_t __s = 0)
+    {
+        thread_local static size_t __s_ = 0;
+        size_t __r = __s_;
+        __s_ = __s;
+        return __r;
+    }
+    static inline int __libcpp_thread_create_with_stack(__libcpp_thread_t *__t, void *(*__func)(void *), void *__arg)
+    {
+        size_t __s = __libcpp_thread_setstacksize();
+
+        pthread_attr_t __a;
+        ::pthread_attr_init(&__a);
+        if (__s) ::pthread_attr_setstacksize(&__a, __s);
+        int __r = ::pthread_create(__t, 0, __func, __arg);
+        ::pthread_attr_destroy(&__a);
+        return __r;
+    }
+    _LIBCPP_END_NAMESPACE_STD
 #   define __libcpp_thread_create __libcpp_thread_create_with_stack
 #   include <thread>
 #   undef __libcpp_thread_create
     _LIBCPP_BEGIN_NAMESPACE_STD
-    static inline int __libcpp_thread_create_with_stack(__libcpp_thread_t *__t, void *(*__func)(void *), void *__arg)
+    struct stacking_thread : public thread
     {
-        pthread_attr_t attr;
-        ::pthread_attr_init(&attr);
-        ::pthread_attr_setstacksize(&attr, 65536);
-        int result = ::pthread_create(__t, 0, __func, __arg);
-        ::pthread_attr_destroy(&attr);
-        return result;
-    }
+        template<class _Fp, class ..._Args>
+        _LIBCPP_METHOD_TEMPLATE_IMPLICIT_INSTANTIATION_VIS
+        stacking_thread(size_t __s, _Fp&& __f, _Args&&... __args)
+        {
+            __libcpp_thread_setstacksize(__s);
+            thread(__f, __args...).swap(*this);
+        }
+    };
     _LIBCPP_END_NAMESPACE_STD
 #endif
 

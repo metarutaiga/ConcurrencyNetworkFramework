@@ -332,8 +332,8 @@ bool Connection::ConnectTCP()
     Socket::setsockopt(thiz.socketTCP, SOL_SOCKET, SO_KEEPALIVE, (void*)&enable, sizeof(enable));
     Socket::setsockopt(thiz.socketTCP, SOL_TCP, TCP_NODELAY, (void*)&enable, sizeof(enable));
 
-    std::thread([this]{ thiz.ProcedureRecvTCP(); }).swap(thiz.threadRecvTCP);
-    std::thread([this]{ thiz.ProcedureSendTCP(); }).swap(thiz.threadSendTCP);
+    std::stacking_thread(65536, [this]{ thiz.ProcedureRecvTCP(); }).swap(thiz.threadRecvTCP);
+    std::stacking_thread(65536, [this]{ thiz.ProcedureSendTCP(); }).swap(thiz.threadSendTCP);
     if (thiz.threadRecvTCP.joinable() == false || thiz.threadSendTCP.joinable() == false)
     {
         CONNECT_LOG(TCP, -1, "%s %s", "thread", ::strerror(errno));
@@ -385,8 +385,8 @@ bool Connection::ConnectUDP()
         return false;
     }
 
-    std::thread([this]{ thiz.ProcedureRecvUDP(); }).swap(thiz.threadRecvUDP);
-    std::thread([this]{ thiz.ProcedureSendUDP(); }).swap(thiz.threadSendUDP);
+    std::stacking_thread(65536, [this]{ thiz.ProcedureRecvUDP(); }).swap(thiz.threadRecvUDP);
+    std::stacking_thread(65536, [this]{ thiz.ProcedureSendUDP(); }).swap(thiz.threadSendUDP);
     if (thiz.threadRecvUDP.joinable() == false || thiz.threadSendUDP.joinable() == false)
     {
         CONNECT_LOG(UDP, -1, "%s %s", "thread", ::strerror(errno));

@@ -142,7 +142,7 @@ bool Listener::Start()
         return false;
     }
 
-    std::thread([this]{ thiz.ProcedureListen(); }).swap(thiz.threadListen);
+    std::stacking_thread(65536, [this]{ thiz.ProcedureListen(); }).swap(thiz.threadListen);
     if (thiz.threadListen.joinable() == false)
     {
         LISTEN_LOG(-1, "%s %s", "thread", ::strerror(errno));
