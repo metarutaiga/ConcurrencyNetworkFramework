@@ -12,6 +12,7 @@ class Event;
 class Listener;
 class Framework
 {
+protected:
     volatile bool terminate;
 
     std::vector<Listener*> serverArray;

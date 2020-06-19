@@ -10,6 +10,7 @@
 
 class Buffer : public std::shared_ptr<std::vector<char>>
 {
+protected:
     static void Recycle(element_type* pointer);
 
 public:

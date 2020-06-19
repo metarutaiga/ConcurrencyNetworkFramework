@@ -59,16 +59,16 @@ static inline int& errno()
     {
 #   if defined(__APPLE__)
         dispatch_semaphore_t semaphore;
-        counting_semaphore() { semaphore = dispatch_semaphore_create(0); }
+        counting_semaphore(ptrdiff_t count = 0) { semaphore = dispatch_semaphore_create(count); }
         ~counting_semaphore() { dispatch_release(semaphore); }
-        void release() { dispatch_semaphore_signal(semaphore); }
+        void release(ptrdiff_t update = 1) { while(update--) dispatch_semaphore_signal(semaphore); }
         void acquire() { dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER); }
 #   else
         sem_t semaphore;
-        counting_semaphore() { sem_init(&semaphore, 0, 0); }
+        counting_semaphore(ptrdiff_t count = 0) { sem_init(&semaphore, 0, count); }
         ~counting_semaphore() { sem_destroy(&semaphore); }
-        void release() { sem_post(&semaphore); }
-        void acquire() { sem_wait(&semaphore); }
+        void release(ptrdiff_t update = 1) { while(update--) sem_post(&semaphore); }
+        void acquire() { while (sem_wait(&semaphore) == -1 && errno == EINTR); }
 #   endif
     };
     _LIBCPP_END_NAMESPACE_STD

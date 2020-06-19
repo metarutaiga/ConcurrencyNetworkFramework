@@ -9,6 +9,7 @@
 static std::vector<Buffer> bufferPool;
 static std::mutex bufferPoolMutex;
 static bool bufferPoolTerminate;
+static struct BufferPoolExit { ~BufferPoolExit() { bufferPoolTerminate = true; } } bufferPoolExit;
 //------------------------------------------------------------------------------
 void Buffer::Recycle(element_type* pointer)
 {
