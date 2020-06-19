@@ -409,6 +409,9 @@ void Connection::Disconnect()
 //------------------------------------------------------------------------------
 void Connection::Send(const Buffer& buffer)
 {
+    if (thiz.terminate)
+        return;
+
     if (thiz.readyUDP && (*buffer).size() <= UDP_MAX_SIZE)
     {
         thiz.sendBufferMutexUDP.lock();
