@@ -18,11 +18,15 @@ static inline int& errno()
     return (*__errno());
 #elif defined(__APPLE__)
     return (*__error());
+#elif defined(__linux__)
+    return (*__errno_location());
 #else
     return ::errno;
 #endif
 }
 #define errno errno()
+
+#include <sys/socket.h>
 
 #include <cstddef>
 

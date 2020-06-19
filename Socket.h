@@ -8,8 +8,6 @@
 
 #include "FrameworkHeader.h"
 
-#include <sys/socket.h>
-
 #undef errno
 
 class Socket
