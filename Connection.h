@@ -23,18 +23,18 @@ protected:
     std::vector<Buffer> sendBufferUDP;
     std::mutex sendBufferMutexTCP;
     std::mutex sendBufferMutexUDP;
-    sem_t sendBufferSemaphoreTCP;
-    sem_t sendBufferSemaphoreUDP;
+    std::counting_semaphore sendBufferSemaphoreTCP;
+    std::counting_semaphore sendBufferSemaphoreUDP;
 
     char* sourceAddress;
     char* sourcePort;
     char* destinationAddress;
     char* destinationPort;
 
-    std::thread* threadRecvTCP;
-    std::thread* threadSendTCP;
-    std::thread* threadRecvUDP;
-    std::thread* threadSendUDP;
+    std::thread threadRecvTCP;
+    std::thread threadSendTCP;
+    std::thread threadRecvUDP;
+    std::thread threadSendUDP;
 
     static std::atomic_int activeThreadCount[4];
 

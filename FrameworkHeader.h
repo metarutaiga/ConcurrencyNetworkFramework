@@ -24,36 +24,50 @@ static inline int& errno()
 }
 #define errno errno()
 
-#if defined(__APPLE__)
-#   include <dispatch/dispatch.h>
-#   define sem_t                dispatch_semaphore_t
-#   define sem_init(s, p, v)    atoi(((*s) = dispatch_semaphore_create(v)) ? "0" : "-1")
-#   define sem_destroy(s)       dispatch_release(*s)
-#   define sem_post(s)          dispatch_semaphore_signal(*s)
-#   define sem_wait(s)          dispatch_semaphore_wait(*s, DISPATCH_TIME_FOREVER)
-#   define sem_timedwait(s, a)  dispatch_semaphore_wait(*s, dispatch_walltime(a, 0))
-#else
-#   include <semaphore.h>
-    struct sem_comparable_t : public sem_t { operator bool() { return true; } };
-#   define sem_t                sem_comparable_t
-#endif
+#include <cstddef>
 
 #if _LIBCPP_VERSION
 #   include <__threading_support>
 #   define __libcpp_thread_create __libcpp_thread_create_with_stack
 #   include <thread>
 #   undef __libcpp_thread_create
-_LIBCPP_BEGIN_NAMESPACE_STD
-static inline int __libcpp_thread_create_with_stack(__libcpp_thread_t *__t, void *(*__func)(void *), void *__arg)
-{
-    pthread_attr_t attr;
-    ::pthread_attr_init(&attr);
-    ::pthread_attr_setstacksize(&attr, 65536);
-    int result = ::pthread_create(__t, 0, __func, __arg);
-    ::pthread_attr_destroy(&attr);
-    return result;
-}
-_LIBCPP_END_NAMESPACE_STD
+    _LIBCPP_BEGIN_NAMESPACE_STD
+    static inline int __libcpp_thread_create_with_stack(__libcpp_thread_t *__t, void *(*__func)(void *), void *__arg)
+    {
+        pthread_attr_t attr;
+        ::pthread_attr_init(&attr);
+        ::pthread_attr_setstacksize(&attr, 65536);
+        int result = ::pthread_create(__t, 0, __func, __arg);
+        ::pthread_attr_destroy(&attr);
+        return result;
+    }
+    _LIBCPP_END_NAMESPACE_STD
+#endif
+
+#if _LIBCPP_VERSION
+#   if defined(__APPLE__)
+#       include <dispatch/dispatch.h>
+#   else
+#       include <semaphore.h>
+#   endif
+    _LIBCPP_BEGIN_NAMESPACE_STD
+    struct counting_semaphore
+    {
+#   if defined(__APPLE__)
+        dispatch_semaphore_t semaphore;
+        counting_semaphore() { semaphore = dispatch_semaphore_create(0); }
+        ~counting_semaphore() { dispatch_release(semaphore); }
+        void release() { dispatch_semaphore_signal(semaphore); }
+        void acquire() { dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER); }
+#   else
+        sem_t semaphore;
+        counting_semaphore() { sem_init(&semaphore, 0, 0); }
+        ~counting_semaphore() { sem_destroy(&semaphore); }
+        void release() { sem_post(&semaphore); }
+        void acquire() { sem_wait(&semaphore); }
+#   endif
+    };
+    _LIBCPP_END_NAMESPACE_STD
 #endif
 
 #include <atomic>
