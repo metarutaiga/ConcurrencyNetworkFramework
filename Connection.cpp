@@ -315,8 +315,14 @@ bool Connection::ConnectTCP()
         return true;
 
     int enable = 1;
-    Socket::setsockopt(thiz.socketTCP, SOL_SOCKET, SO_KEEPALIVE, &enable, sizeof(enable));
-    Socket::setsockopt(thiz.socketTCP, SOL_TCP, TCP_NODELAY, &enable, sizeof(enable));
+    if (Socket::setsockopt(thiz.socketTCP, SOL_SOCKET, SO_KEEPALIVE, &enable, sizeof(enable)) < 0)
+    {
+        CONNECT_LOG(TCP, -1, "%s %s", "setsockopt", "SO_KEEPALIVE");
+    }
+    if (Socket::setsockopt(thiz.socketTCP, SOL_TCP, TCP_NODELAY, &enable, sizeof(enable)) < 0)
+    {
+        CONNECT_LOG(TCP, -1, "%s %s", "setsockopt", "TCP_NODELAY");
+    }
 
     thiz.threadRecvTCP = std::stacking_thread(65536, [this]{ thiz.ProcedureRecvTCP(); });
     thiz.threadSendTCP = std::stacking_thread(65536, [this]{ thiz.ProcedureSendTCP(); });
@@ -349,8 +355,14 @@ bool Connection::ConnectUDP()
     }
 
     int enable = 1;
-    Socket::setsockopt(thiz.socketUDP, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
-    Socket::setsockopt(thiz.socketUDP, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable));
+    if (Socket::setsockopt(thiz.socketUDP, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) < 0)
+    {
+        CONNECT_LOG(UDP, -1, "%s %s", "setsockopt", "SO_REUSEADDR");
+    }
+    if (Socket::setsockopt(thiz.socketUDP, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable)) < 0)
+    {
+        CONNECT_LOG(UDP, -1, "%s %s", "setsockopt", "SO_REUSEPORT");
+    }
 
 #if defined(__linux__)
     struct sock_filter filter[] =
@@ -365,9 +377,9 @@ bool Connection::ConnectUDP()
         .len = 2,
         .filter = filter,
     };
-    if (Socket::setsockopt(thiz.socketUDP, SOL_SOCKET, SO_ATTACH_REUSEPORT_CBPF, &cbpf, sizeof(cbpf)) == 0)
+    if (Socket::setsockopt(thiz.socketUDP, SOL_SOCKET, SO_ATTACH_REUSEPORT_CBPF, &cbpf, sizeof(cbpf)) < 0)
     {
-        CONNECT_LOG(UDP, 0, "%s %s", "setsockopt", "Classic BPF");
+        CONNECT_LOG(UDP, -1, "%s %s", "setsockopt", "SO_ATTACH_REUSEPORT_CBPF");
     }
 #endif
 

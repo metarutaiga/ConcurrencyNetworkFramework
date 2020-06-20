@@ -31,5 +31,5 @@ public:
 
     virtual void Push(Event* event);
 
-    virtual int Dispatch();
+    virtual int Dispatch(size_t listenCount);
 };

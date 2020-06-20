@@ -16,16 +16,15 @@
 #include "Listener.h"
 
 #define LISTEN_LOG(level, format, ...) \
-    Log::Format(level, "%s %d (%s:%s) : " format, "Listen", thiz.socket, thiz.address, thiz.port, __VA_ARGS__)
+    Log::Format(level, "%s %d (%s:%s) : " format, "Listen", socket, thiz.address, thiz.port, __VA_ARGS__)
 
 //------------------------------------------------------------------------------
 Listener::Listener(const char* address, const char* port, int backlog)
 {
     thiz.terminate = false;
-    thiz.socket = 0;
-    thiz.backlog = backlog;
     thiz.address = address ? ::strdup(address) : nullptr;
     thiz.port = port ? ::strdup(port) : ::strdup("7777");
+    thiz.backlog = backlog;
 #if defined(__APPLE__)
     signal(SIGPIPE, SIG_IGN);
 #endif
@@ -47,7 +46,7 @@ Listener::~Listener()
     }
 }
 //------------------------------------------------------------------------------
-void Listener::ProcedureListen()
+void Listener::ProcedureListen(int socket)
 {
     std::vector<Connection*> connectionLocal;
 
@@ -55,7 +54,7 @@ void Listener::ProcedureListen()
     {
         struct sockaddr_storage addr = {};
         socklen_t size = sizeof(addr);
-        int id = Socket::accept(thiz.socket, (struct sockaddr*)&addr, &size);
+        int id = Socket::accept(socket, (struct sockaddr*)&addr, &size);
         if (id <= 0 || thiz.terminate)
         {
             LISTEN_LOG(-1, "%s %s", "accept", Socket::strerror(Socket::errno));
@@ -101,63 +100,75 @@ void Listener::ProcedureListen()
     thiz.terminate = true;
 }
 //------------------------------------------------------------------------------
-bool Listener::Start()
+bool Listener::Start(size_t count)
 {
     struct sockaddr_storage sockaddr = {};
     socklen_t sockaddrLength = Connection::SetAddressPort(sockaddr, thiz.address, thiz.port);
-    thiz.socket = Socket::socket(sockaddr.ss_family, SOCK_STREAM, IPPROTO_TCP);
-    if (thiz.socket <= 0)
+    for (size_t i = 0; i < count; ++i)
     {
-        LISTEN_LOG(-1, "%s %s", "socket", Socket::strerror(Socket::errno));
-        return false;
-    }
+        int socket = Socket::socket(sockaddr.ss_family, SOCK_STREAM, IPPROTO_TCP);
+        if (socket <= 0)
+        {
+            LISTEN_LOG(-1, "%s %s", "socket", Socket::strerror(Socket::errno));
+            continue;
+        }
 
-    int enable = 1;
-    Socket::setsockopt(thiz.socket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
-    Socket::setsockopt(thiz.socket, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable));
+        int enable = 1;
+        if (Socket::setsockopt(socket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) < 0)
+        {
+            LISTEN_LOG(-1, "%s %s", "setsockopt", "SO_REUSEADDR");
+        }
+        if (Socket::setsockopt(socket, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable)) < 0)
+        {
+            LISTEN_LOG(-1, "%s %s", "setsockopt", "SO_REUSEPORT");
+        }
 
 #if defined(__linux__)
-    struct sock_filter filter[] =
-    {
-        /* A = raw_smp_processor_id() */
-        { BPF_LD  | BPF_W | BPF_ABS, 0, 0, (unsigned int)(SKF_AD_OFF + SKF_AD_CPU) },
-        /* return A */
-        { BPF_RET | BPF_A, 0, 0, 0 },
-    };
-    struct sock_fprog cbpf =
-    {
-        .len = 2,
-        .filter = filter,
-    };
-    if (Socket::setsockopt(thiz.socket, SOL_SOCKET, SO_ATTACH_REUSEPORT_CBPF, &cbpf, sizeof(cbpf)) == 0)
-    {
-        LISTEN_LOG(0, "%s %s", "setsockopt", "Classic BPF");
-    }
+        struct sock_filter filter[] =
+        {
+            /* A = raw_smp_processor_id() */
+            { BPF_LD  | BPF_W | BPF_ABS, 0, 0, (unsigned int)(SKF_AD_OFF + SKF_AD_CPU) },
+            /* return A */
+            { BPF_RET | BPF_A, 0, 0, 0 },
+        };
+        struct sock_fprog cbpf =
+        {
+            .len = 2,
+            .filter = filter,
+        };
+        if (Socket::setsockopt(socket, SOL_SOCKET, SO_ATTACH_REUSEPORT_CBPF, &cbpf, sizeof(cbpf)) < 0)
+        {
+            LISTEN_LOG(-1, "%s %s", "setsockopt", "SO_ATTACH_REUSEPORT_CBPF");
+        }
 #endif
 
-    if (Socket::bind(thiz.socket, (struct sockaddr*)&sockaddr, sockaddrLength) != 0)
-    {
-        LISTEN_LOG(-1, "%s %s", "bind", Socket::strerror(Socket::errno));
-        return false;
+        if (Socket::bind(socket, (struct sockaddr*)&sockaddr, sockaddrLength) < 0)
+        {
+            LISTEN_LOG(-1, "%s %s", "bind", Socket::strerror(Socket::errno));
+            Socket::close(socket);
+            continue;
+        }
+
+        if (Socket::listen(socket, thiz.backlog) < 0)
+        {
+            LISTEN_LOG(-1, "%s %s", "listen", Socket::strerror(Socket::errno));
+            Socket::close(socket);
+            continue;
+        }
+
+        thiz.threadListen.emplace_back(std::stacking_thread(65536, [this, socket]{ thiz.ProcedureListen(socket); }));
+        if (thiz.threadListen.back().joinable() == false)
+        {
+            LISTEN_LOG(-1, "%s %s", "thread", ::strerror(errno));
+            thiz.threadListen.pop_back();
+            Socket::close(socket);
+            continue;
+        }
+        thiz.socket.emplace_back(socket);
+
+        LISTEN_LOG(0, "%s %s", "listen", "ready");
     }
 
-    int fastOpen = 5;
-    Socket::setsockopt(thiz.socket, SOL_TCP, TCP_FASTOPEN, &fastOpen, sizeof(fastOpen));
-
-    if (Socket::listen(thiz.socket, thiz.backlog) != 0)
-    {
-        LISTEN_LOG(-1, "%s %s", "listen", Socket::strerror(Socket::errno));
-        return false;
-    }
-
-    thiz.threadListen = std::stacking_thread(65536, [this]{ thiz.ProcedureListen(); });
-    if (thiz.threadListen.joinable() == false)
-    {
-        LISTEN_LOG(-1, "%s %s", "thread", ::strerror(errno));
-        return false;
-    }
-
-    LISTEN_LOG(0, "%s %s", "listen", "ready");
     return true;
 }
 //------------------------------------------------------------------------------
@@ -165,16 +176,23 @@ void Listener::Stop()
 {
     thiz.terminate = true;
 
-    if (thiz.socket > 0)
+    for (int socket : thiz.socket)
     {
-        Socket::shutdown(thiz.socket, SHUT_RD);
-        Socket::close(thiz.socket);
-        thiz.socket = 0;
+        if (socket > 0)
+        {
+            Socket::shutdown(socket, SHUT_RD);
+            Socket::close(socket);
+        }
     }
-    if (thiz.threadListen.joinable())
+    thiz.socket.clear();
+    for (std::thread& thread : thiz.threadListen)
     {
-        thiz.threadListen.join();
+        if (thread.joinable())
+        {
+            thread.join();
+        }
     }
+    thiz.threadListen.clear();
 
     std::vector<Connection*> connectionLocal;
     thiz.connectionMutex.lock();

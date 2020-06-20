@@ -40,14 +40,14 @@ void Framework::Push(Event* event)
     thiz.eventSemaphore.release();
 }
 //------------------------------------------------------------------------------
-int Framework::Dispatch()
+int Framework::Dispatch(size_t listenCount)
 {
     std::vector<Event*> eventLocal;
 
     Log::Format(0, "Framework : Start");
     for (Listener* server : thiz.serverArray)
     {
-        server->Start();
+        server->Start(listenCount);
     }
 
     Log::Format(0, "Framework : Loop");

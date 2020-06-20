@@ -14,23 +14,24 @@ class Listener
 protected:
     volatile bool terminate;
 
-    int socket;
-    int backlog;
-    char* address;
-    char* port;
-    std::thread threadListen;
+    std::vector<int> socket;
+    std::vector<std::thread> threadListen;
 
     std::vector<Connection*> connectionArray;
     std::mutex connectionMutex;
 
+    char* address;
+    char* port;
+    int backlog;
+
 protected:
-    virtual void ProcedureListen();
+    virtual void ProcedureListen(int socket);
 
 public:
     Listener(const char* address, const char* port, int backlog = 128);
     virtual ~Listener();
 
-    virtual bool Start();
+    virtual bool Start(size_t count);
     virtual void Stop();
 
     virtual Connection* CreateConnection(int socket, const struct sockaddr_storage& addr);
