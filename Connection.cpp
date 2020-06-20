@@ -5,10 +5,8 @@
 // https://github.com/metarutaiga/ConcurrencyNetworkFramework
 //==============================================================================
 #include <netdb.h>
-#include <unistd.h>
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
-#include <sys/time.h>
 #include "Listener.h"
 #include "Log.h"
 #include "Socket.h"
@@ -332,8 +330,8 @@ bool Connection::ConnectTCP()
     Socket::setsockopt(thiz.socketTCP, SOL_SOCKET, SO_KEEPALIVE, (void*)&enable, sizeof(enable));
     Socket::setsockopt(thiz.socketTCP, SOL_TCP, TCP_NODELAY, (void*)&enable, sizeof(enable));
 
-    std::stacking_thread(65536, [this]{ thiz.ProcedureRecvTCP(); }).swap(thiz.threadRecvTCP);
-    std::stacking_thread(65536, [this]{ thiz.ProcedureSendTCP(); }).swap(thiz.threadSendTCP);
+    thiz.threadRecvTCP = std::stacking_thread(65536, [this]{ thiz.ProcedureRecvTCP(); });
+    thiz.threadSendTCP = std::stacking_thread(65536, [this]{ thiz.ProcedureSendTCP(); });
     if (thiz.threadRecvTCP.joinable() == false || thiz.threadSendTCP.joinable() == false)
     {
         CONNECT_LOG(TCP, -1, "%s %s", "thread", ::strerror(errno));
@@ -385,8 +383,8 @@ bool Connection::ConnectUDP()
         return false;
     }
 
-    std::stacking_thread(65536, [this]{ thiz.ProcedureRecvUDP(); }).swap(thiz.threadRecvUDP);
-    std::stacking_thread(65536, [this]{ thiz.ProcedureSendUDP(); }).swap(thiz.threadSendUDP);
+    thiz.threadRecvUDP = std::stacking_thread(65536, [this]{ thiz.ProcedureRecvUDP(); });
+    thiz.threadSendUDP = std::stacking_thread(65536, [this]{ thiz.ProcedureSendUDP(); });
     if (thiz.threadRecvUDP.joinable() == false || thiz.threadSendUDP.joinable() == false)
     {
         CONNECT_LOG(UDP, -1, "%s %s", "thread", ::strerror(errno));

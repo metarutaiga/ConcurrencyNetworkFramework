@@ -5,8 +5,6 @@
 // https://github.com/metarutaiga/ConcurrencyNetworkFramework
 //==============================================================================
 #include <netdb.h>
-#include <unistd.h>
-#include <netinet/in.h>
 #include <netinet/tcp.h>
 #include "Connection.h"
 #include "Log.h"
@@ -142,7 +140,7 @@ bool Listener::Start()
         return false;
     }
 
-    std::stacking_thread(65536, [this]{ thiz.ProcedureListen(); }).swap(thiz.threadListen);
+    thiz.threadListen = std::stacking_thread(65536, [this]{ thiz.ProcedureListen(); });
     if (thiz.threadListen.joinable() == false)
     {
         LISTEN_LOG(-1, "%s %s", "thread", ::strerror(errno));
