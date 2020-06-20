@@ -5,6 +5,7 @@
 // https://github.com/metarutaiga/ConcurrencyNetworkFramework
 //==============================================================================
 #include <netdb.h>
+#include <netinet/in.h>
 #include <netinet/tcp.h>
 #include "Connection.h"
 #include "Log.h"
@@ -99,37 +100,24 @@ void Listener::ProcedureListen()
 //------------------------------------------------------------------------------
 bool Listener::Start()
 {
-    struct addrinfo* addrinfo = nullptr;
-    struct addrinfo hints = {};
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE;
-    int error = ::getaddrinfo(thiz.address, thiz.port, &hints, &addrinfo);
-    if (addrinfo == nullptr)
-    {
-        LISTEN_LOG(-1, "%s %s", "getaddrinfo", ::gai_strerror(error));
-        return false;
-    }
-
-    thiz.socket = Socket::socket(addrinfo->ai_family, addrinfo->ai_socktype, addrinfo->ai_protocol);
+    struct sockaddr_storage sockaddr = {};
+    socklen_t sockaddrLength = Connection::SetAddressPort(sockaddr, thiz.address, thiz.port);
+    thiz.socket = Socket::socket(sockaddr.ss_family, SOCK_STREAM, IPPROTO_TCP);
     if (thiz.socket <= 0)
     {
         LISTEN_LOG(-1, "%s %s", "socket", Socket::strerror(Socket::errno));
-        ::freeaddrinfo(addrinfo);
         return false;
     }
 
     int enable = 1;
-    Socket::setsockopt(thiz.socket, SOL_SOCKET, SO_REUSEADDR, (void*)&enable, sizeof(enable));
-    Socket::setsockopt(thiz.socket, SOL_SOCKET, SO_REUSEPORT, (void*)&enable, sizeof(enable));
+    Socket::setsockopt(thiz.socket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
+    Socket::setsockopt(thiz.socket, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable));
 
-    if (Socket::bind(thiz.socket, addrinfo->ai_addr, addrinfo->ai_addrlen) != 0)
+    if (Socket::bind(thiz.socket, (struct sockaddr*)&sockaddr, sockaddrLength) != 0)
     {
         LISTEN_LOG(-1, "%s %s", "bind", Socket::strerror(Socket::errno));
-        ::freeaddrinfo(addrinfo);
         return false;
     }
-    ::freeaddrinfo(addrinfo);
 
     int fastOpen = 5;
     Socket::setsockopt(thiz.socket, SOL_TCP, TCP_FASTOPEN, &fastOpen, sizeof(fastOpen));

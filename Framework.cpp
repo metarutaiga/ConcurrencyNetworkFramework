@@ -24,6 +24,7 @@ Framework::~Framework()
 void Framework::Terminate()
 {
     thiz.terminate = true;
+    thiz.eventSemaphore.release();
 }
 //------------------------------------------------------------------------------
 void Framework::Server(Listener* server)
@@ -36,11 +37,11 @@ void Framework::Push(Event* event)
     thiz.eventMutex.lock();
     thiz.eventArray.emplace_back(event);
     thiz.eventMutex.unlock();
+    thiz.eventSemaphore.release();
 }
 //------------------------------------------------------------------------------
 int Framework::Dispatch()
 {
-    int idleTime = 0;
     std::vector<Event*> eventLocal;
 
     Log::Format(0, "Framework : Start");
@@ -52,23 +53,11 @@ int Framework::Dispatch()
     Log::Format(0, "Framework : Loop");
     while (thiz.terminate == false)
     {
-        if (thiz.eventArray.empty())
+        if (thiz.eventSemaphore.try_acquire_for(std::chrono::seconds(60)) == false)
         {
-            idleTime++;
-            if (idleTime >= 60 * 60)
-            {
-                idleTime = 0;
-                Log::Format(0, "Framework : Idle");
-            }
-
-            struct timespec timespec;
-            timespec.tv_sec = 0;
-            timespec.tv_nsec = 1000 * 1000 * 1000 / 60;
-            ::nanosleep(&timespec, nullptr);
+            Log::Format(0, "Framework : Idle");
             continue;
         }
-        idleTime = 0;
-
         thiz.eventMutex.lock();
         thiz.eventArray.swap(eventLocal);
         thiz.eventMutex.unlock();

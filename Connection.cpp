@@ -312,8 +312,8 @@ bool Connection::ConnectTCP()
         return true;
 
     int enable = 1;
-    Socket::setsockopt(thiz.socketTCP, SOL_SOCKET, SO_KEEPALIVE, (void*)&enable, sizeof(enable));
-    Socket::setsockopt(thiz.socketTCP, SOL_TCP, TCP_NODELAY, (void*)&enable, sizeof(enable));
+    Socket::setsockopt(thiz.socketTCP, SOL_SOCKET, SO_KEEPALIVE, &enable, sizeof(enable));
+    Socket::setsockopt(thiz.socketTCP, SOL_TCP, TCP_NODELAY, &enable, sizeof(enable));
 
     thiz.threadRecvTCP = std::stacking_thread(65536, [this]{ thiz.ProcedureRecvTCP(); });
     thiz.threadSendTCP = std::stacking_thread(65536, [this]{ thiz.ProcedureSendTCP(); });
@@ -346,8 +346,8 @@ bool Connection::ConnectUDP()
     }
 
     int enable = 1;
-    Socket::setsockopt(thiz.socketUDP, SOL_SOCKET, SO_REUSEADDR, (void*)&enable, sizeof(enable));
-    Socket::setsockopt(thiz.socketUDP, SOL_SOCKET, SO_REUSEPORT, (void*)&enable, sizeof(enable));
+    Socket::setsockopt(thiz.socketUDP, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
+    Socket::setsockopt(thiz.socketUDP, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable));
 
     if (Socket::bind(thiz.socketUDP, (struct sockaddr*)&sockaddrSource, sockaddSourceLength) < 0)
     {

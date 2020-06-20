@@ -17,6 +17,7 @@ protected:
 
     std::vector<Listener*> serverArray;
 
+    std::counting_semaphore eventSemaphore;
     std::vector<Event*> eventArray;
     std::mutex eventMutex;
 
