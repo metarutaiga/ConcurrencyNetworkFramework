@@ -4,7 +4,6 @@
 // Copyright (c) 2020 TAiGA
 // https://github.com/metarutaiga/ConcurrencyNetworkFramework
 //==============================================================================
-#include <netdb.h>
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
 #include "Listener.h"
@@ -48,44 +47,30 @@ Connection::Connection(const char* address, const char* port)
     thiz.destinationAddress = address ? ::strdup(address) : nullptr;
     thiz.destinationPort = port ? ::strdup(port) : nullptr;
 
-    struct addrinfo* addrinfo = nullptr;
-    struct addrinfo hints = {};
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE;
-    int error = ::getaddrinfo(thiz.destinationAddress, thiz.destinationPort, &hints, &addrinfo);
-    if (addrinfo == nullptr)
-    {
-        CONNECT_LOG(TCP, -1, "%s %s", "getaddrinfo", ::gai_strerror(error));
-        return;
-    }
-
-    thiz.socketTCP = Socket::socket(addrinfo->ai_family, addrinfo->ai_socktype, addrinfo->ai_protocol);
+    struct sockaddr_storage sockaddrDestination = {};
+    socklen_t sockaddrDestinationLength = SetAddressPort(sockaddrDestination, thiz.destinationAddress, thiz.destinationPort);
+    thiz.socketTCP = Socket::socket(sockaddrDestination.ss_family, SOCK_STREAM, IPPROTO_TCP);
     if (thiz.socketTCP <= 0)
     {
         CONNECT_LOG(TCP, -1, "%s %s", "socket", Socket::strerror(Socket::errno));
-        ::freeaddrinfo(addrinfo);
         return;
     }
 
-    if (Socket::connect(thiz.socketTCP, addrinfo->ai_addr, addrinfo->ai_addrlen) < 0)
+    if (Socket::connect(thiz.socketTCP, (struct sockaddr*)&sockaddrDestination, sockaddrDestinationLength) < 0)
     {
         CONNECT_LOG(TCP, -1, "%s %s", "connect", Socket::strerror(Socket::errno));
         Socket::close(thiz.socketTCP);
         thiz.socketTCP = 0;
-        ::freeaddrinfo(addrinfo);
         return;
     }
     thiz.readyTCP = true;
 
-    struct sockaddr_storage addr = {};
-    socklen_t size = sizeof(addr);
-    if (Socket::getsockname(thiz.socketTCP, (struct sockaddr*)&addr, &size) == 0)
+    struct sockaddr_storage sockaddrSource = {};
+    socklen_t sockaddSourceLength = sizeof(sockaddrSource);
+    if (Socket::getsockname(thiz.socketTCP, (struct sockaddr*)&sockaddrSource, &sockaddSourceLength) == 0)
     {
-        GetAddressPort(addr, thiz.sourceAddress, thiz.sourcePort);
+        GetAddressPort(sockaddrSource, thiz.sourceAddress, thiz.sourcePort);
     }
-
-    ::freeaddrinfo(addrinfo);
 }
 //------------------------------------------------------------------------------
 Connection::~Connection()
@@ -351,11 +336,8 @@ bool Connection::ConnectUDP()
     if (thiz.threadRecvUDP.joinable() || thiz.threadSendUDP.joinable())
         return true;
 
-    struct sockaddr_storage sockaddrSource;
-    struct sockaddr_storage sockaddrDestination;
-    int sockaddSourceLength = SetAddressPort(sockaddrSource, thiz.sourceAddress, thiz.sourcePort);
-    int sockaddrDestinationLength = SetAddressPort(sockaddrDestination, thiz.destinationAddress, thiz.destinationPort);
-
+    struct sockaddr_storage sockaddrSource = {};
+    socklen_t sockaddSourceLength = SetAddressPort(sockaddrSource, thiz.sourceAddress, thiz.sourcePort);
     thiz.socketUDP = Socket::socket(sockaddrSource.ss_family, SOCK_DGRAM, IPPROTO_UDP);
     if (thiz.socketUDP <= 0)
     {
@@ -375,6 +357,8 @@ bool Connection::ConnectUDP()
         return false;
     }
 
+    struct sockaddr_storage sockaddrDestination = {};
+    socklen_t sockaddrDestinationLength = SetAddressPort(sockaddrDestination, thiz.destinationAddress, thiz.destinationPort);
     if (Socket::connect(thiz.socketUDP, (struct sockaddr*)&sockaddrDestination, sockaddrDestinationLength) < 0)
     {
         CONNECT_LOG(UDP, -1, "%s %s", "connect", Socket::strerror(Socket::errno));
@@ -457,6 +441,9 @@ void Connection::GetAddressPort(const struct sockaddr_storage& addr, char*& addr
 //------------------------------------------------------------------------------
 int Connection::SetAddressPort(struct sockaddr_storage& addr, const char* address, const char* port)
 {
+    if (address == nullptr || port == nullptr)
+        return 0;
+
     if (strchr(address, '.'))
     {
         sockaddr_in& sa = *(sockaddr_in*)&addr;

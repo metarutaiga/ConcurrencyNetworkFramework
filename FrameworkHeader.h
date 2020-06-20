@@ -28,12 +28,12 @@ static inline int& errno()
 
 #include <sys/socket.h>
 
-#include "HackingSTL/semaphore"
-#include "HackingSTL/thread"
 #include <atomic>
 #include <memory>
 #include <mutex>
 #include <vector>
+#include "HackingSTL/semaphore"
+#include "HackingSTL/thread"
 
 #ifndef MSG_NOSIGNAL
 #   define MSG_NOSIGNAL 0
