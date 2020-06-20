@@ -7,6 +7,9 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#if defined(__linux__)
+#   include <linux/filter.h>
+#endif
 #include "Connection.h"
 #include "Log.h"
 #include "Socket.h"
@@ -112,6 +115,25 @@ bool Listener::Start()
     int enable = 1;
     Socket::setsockopt(thiz.socket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
     Socket::setsockopt(thiz.socket, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable));
+
+#if defined(__linux__)
+    struct sock_filter filter[] =
+    {
+        /* A = raw_smp_processor_id() */
+        { BPF_LD  | BPF_W | BPF_ABS, 0, 0, (unsigned int)(SKF_AD_OFF + SKF_AD_CPU) },
+        /* return A */
+        { BPF_RET | BPF_A, 0, 0, 0 },
+    };
+    struct sock_fprog cbpf =
+    {
+        .len = 2,
+        .filter = filter,
+    };
+    if (Socket::setsockopt(thiz.socket, SOL_SOCKET, SO_ATTACH_REUSEPORT_CBPF, &cbpf, sizeof(cbpf)) == 0)
+    {
+        LISTEN_LOG(0, "%s %s", "setsockopt", "Classic BPF");
+    }
+#endif
 
     if (Socket::bind(thiz.socket, (struct sockaddr*)&sockaddr, sockaddrLength) != 0)
     {
