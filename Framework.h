@@ -6,15 +6,13 @@
 //==============================================================================
 #pragma once
 
-#include "FrameworkHeader.h"
+#include "Base.h"
 
 class Event;
 class Listener;
-class Framework
+class Framework : public Base
 {
 protected:
-    volatile bool terminate;
-
     std::vector<Listener*> serverArray;
 
     std::counting_semaphore eventSemaphore;

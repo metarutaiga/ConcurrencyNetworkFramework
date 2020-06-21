@@ -6,14 +6,12 @@
 //==============================================================================
 #pragma once
 
-#include "FrameworkHeader.h"
+#include "Base.h"
 #include "Buffer.h"
 
-class Connection
+class Connection : public Base
 {
 protected:
-    volatile bool terminate;
-
     bool readyTCP;
     bool readyUDP;
     int socketTCP;

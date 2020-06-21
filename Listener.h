@@ -6,14 +6,12 @@
 //==============================================================================
 #pragma once
 
-#include "FrameworkHeader.h"
+#include "Base.h"
 
 class Connection;
-class Listener
+class Listener : public Base
 {
 protected:
-    volatile bool terminate;
-
     std::vector<int> socket;
     std::vector<std::thread> threadListen;
 
