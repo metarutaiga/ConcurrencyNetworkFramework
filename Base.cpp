@@ -14,13 +14,13 @@ Base::Base()
 //------------------------------------------------------------------------------
 Base::~Base()
 {
-    for (void(*f)(Base*) : thiz.delayDestroy)
+    for (std::function<void()> f : thiz.delayDestroy)
     {
-        f(this);
+        f();
     }
 }
 //------------------------------------------------------------------------------
-void Base::DelayDestroy(void(*f)(Base*))
+void Base::DelayDestroy(std::function<void()>&& f)
 {
     thiz.delayDestroy.emplace_back(f);
 }

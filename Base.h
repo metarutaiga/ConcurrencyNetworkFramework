@@ -13,11 +13,11 @@ class Base
 protected:
     volatile bool terminate;
 
-    std::vector<void(*)(Base*)> delayDestroy;
+    std::vector<std::function<void()>> delayDestroy;
 
 protected:
     Base();
     virtual ~Base();
 
-    void DelayDestroy(void(*f)(Base*));
+    void DelayDestroy(std::function<void()>&& f);
 };
