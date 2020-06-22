@@ -19,7 +19,7 @@
 #define UDP_MAX_SIZE    1280
 
 #define CONNECT_LOG(proto, level, format, ...) \
-    Log::Format(level, "%s %d (%s:%s:%s@%s:%s) : " format, "Connect", thiz.socket ## proto, #proto, thiz.sourceAddress, thiz.sourcePort, thiz.destinationAddress, thiz.destinationPort, __VA_ARGS__)
+    Log::Format(Log::level, "%s %d (%s:%s:%s@%s:%s) : " format, "Connect", thiz.socket ## proto, #proto, thiz.sourceAddress, thiz.sourcePort, thiz.destinationAddress, thiz.destinationPort, __VA_ARGS__)
 
 std::atomic_int Connection::activeThreadCount[4];
 //------------------------------------------------------------------------------
@@ -53,13 +53,13 @@ Connection::Connection(const char* address, const char* port)
     thiz.socketTCP = Socket::socket(sockaddrDestination.ss_family, SOCK_STREAM, IPPROTO_TCP);
     if (thiz.socketTCP <= 0)
     {
-        CONNECT_LOG(TCP, -1, "%s %s", "socket", Socket::strerror(Socket::errno));
+        CONNECT_LOG(TCP, ERROR, "%s %s", "socket", Socket::strerror(Socket::errno));
         return;
     }
 
-    if (Socket::connect(thiz.socketTCP, (struct sockaddr*)&sockaddrDestination, sockaddrDestinationLength) < 0)
+    if (Socket::connect(thiz.socketTCP, reinterpret_cast<struct sockaddr*>(&sockaddrDestination), sockaddrDestinationLength) < 0)
     {
-        CONNECT_LOG(TCP, -1, "%s %s", "connect", Socket::strerror(Socket::errno));
+        CONNECT_LOG(TCP, ERROR, "%s %s", "connect", Socket::strerror(Socket::errno));
         Socket::close(thiz.socketTCP);
         thiz.socketTCP = 0;
         return;
@@ -68,7 +68,7 @@ Connection::Connection(const char* address, const char* port)
 
     struct sockaddr_storage sockaddrSource = {};
     socklen_t sockaddSourceLength = sizeof(sockaddrSource);
-    if (Socket::getsockname(thiz.socketTCP, (struct sockaddr*)&sockaddrSource, &sockaddSourceLength) == 0)
+    if (Socket::getsockname(thiz.socketTCP, reinterpret_cast<struct sockaddr*>(&sockaddrSource), &sockaddSourceLength) == 0)
     {
         GetAddressPort(sockaddrSource, thiz.sourceAddress, thiz.sourcePort);
     }
@@ -148,14 +148,14 @@ void Connection::ProcedureRecvTCP()
         unsigned short size = 0;
         if (Socket::recv(thiz.socketTCP, &size, sizeof(short), MSG_WAITALL | MSG_NOSIGNAL) <= 0)
         {
-            CONNECT_LOG(TCP, -1, "%s %s", "recv", Socket::strerror(Socket::errno));
+            CONNECT_LOG(TCP, ERROR, "%s %s", "recv", Socket::strerror(Socket::errno));
             break;
         }
 
         // Preserve
         if (size == 0)
         {
-            CONNECT_LOG(TCP, -1, "%s %s", "recv", "empty");
+            CONNECT_LOG(TCP, ERROR, "%s %s", "recv", "empty");
             continue;
         }
 
@@ -163,7 +163,7 @@ void Connection::ProcedureRecvTCP()
         buffer.resize(size);
         if (Socket::recv(thiz.socketTCP, &buffer.front(), size, MSG_WAITALL | MSG_NOSIGNAL) <= 0)
         {
-            CONNECT_LOG(TCP, -1, "%s %s", "recv", Socket::strerror(Socket::errno));
+            CONNECT_LOG(TCP, ERROR, "%s %s", "recv", Socket::strerror(Socket::errno));
             break;
         }
 
@@ -203,27 +203,27 @@ void Connection::ProcedureSendTCP()
                 unsigned short size = (short)buffer.size();
                 if (Socket::send(thiz.socketTCP, &size, sizeof(short), MSG_WAITALL | MSG_NOSIGNAL | MSG_MORE, cork) <= 0)
                 {
-                    CONNECT_LOG(TCP, -1, "%s %s", "send", Socket::strerror(Socket::errno));
+                    CONNECT_LOG(TCP, ERROR, "%s %s", "send", Socket::strerror(Socket::errno));
                     break;
                 }
 
                 // Preserve
                 if (size == 0)
                 {
-                    CONNECT_LOG(TCP, -1, "%s %s", "send", "empty");
+                    CONNECT_LOG(TCP, ERROR, "%s %s", "send", "empty");
                     continue;
                 }
 
                 // Data
                 if (Socket::send(thiz.socketTCP, &buffer.front(), size, MSG_WAITALL | MSG_NOSIGNAL, cork) <= 0)
                 {
-                    CONNECT_LOG(TCP, -1, "%s %s", "send", Socket::strerror(Socket::errno));
+                    CONNECT_LOG(TCP, ERROR, "%s %s", "send", Socket::strerror(Socket::errno));
                     break;
                 }
             }
             else
             {
-                CONNECT_LOG(TCP, -1, "%s %s %zd", "send", "buffer too long", buffer.size());
+                CONNECT_LOG(TCP, ERROR, "%s %s %zd", "send", "buffer too long", buffer.size());
             }
         }
         if (thiz.sendBufferTCP.empty() == false)
@@ -252,7 +252,7 @@ void Connection::ProcedureRecvUDP()
         long size = Socket::recv(thiz.socketUDP, &buffer.front(), buffer.size(), MSG_WAITALL | MSG_NOSIGNAL);
         if (size <= 0)
         {
-            CONNECT_LOG(UDP, -1, "%s %s", "recv", Socket::strerror(Socket::errno));
+            CONNECT_LOG(UDP, ERROR, "%s %s", "recv", Socket::strerror(Socket::errno));
             break;
         }
         buffer.resize(size);
@@ -291,13 +291,13 @@ void Connection::ProcedureSendUDP()
                 // Data
                 if (Socket::send(thiz.socketUDP, &buffer.front(), buffer.size(), MSG_WAITALL | MSG_NOSIGNAL, cork) <= 0)
                 {
-                    CONNECT_LOG(UDP, -1, "%s %s", "send", Socket::strerror(Socket::errno));
+                    CONNECT_LOG(UDP, ERROR, "%s %s", "send", Socket::strerror(Socket::errno));
                     break;
                 }
             }
             else
             {
-                CONNECT_LOG(UDP, -1, "%s %s %zd", "send", "buffer too long", buffer.size());
+                CONNECT_LOG(UDP, ERROR, "%s %s %zd", "send", "buffer too long", buffer.size());
             }
         }
         if (thiz.sendBufferUDP.empty() == false)
@@ -321,22 +321,22 @@ bool Connection::ConnectTCP()
     int enable = 1;
     if (Socket::setsockopt(thiz.socketTCP, SOL_SOCKET, SO_KEEPALIVE, &enable, sizeof(enable)) < 0)
     {
-        CONNECT_LOG(TCP, -1, "%s %s", "setsockopt", "SO_KEEPALIVE");
+        CONNECT_LOG(TCP, ERROR, "%s %s", "setsockopt", "SO_KEEPALIVE");
     }
     if (Socket::setsockopt(thiz.socketTCP, SOL_TCP, TCP_NODELAY, &enable, sizeof(enable)) < 0)
     {
-        CONNECT_LOG(TCP, -1, "%s %s", "setsockopt", "TCP_NODELAY");
+        CONNECT_LOG(TCP, ERROR, "%s %s", "setsockopt", "TCP_NODELAY");
     }
 
     thiz.threadRecvTCP = std::stacking_thread(65536, [this]{ thiz.ProcedureRecvTCP(); });
     thiz.threadSendTCP = std::stacking_thread(65536, [this]{ thiz.ProcedureSendTCP(); });
     if (thiz.threadRecvTCP.joinable() == false || thiz.threadSendTCP.joinable() == false)
     {
-        CONNECT_LOG(TCP, -1, "%s %s", "thread", ::strerror(errno));
+        CONNECT_LOG(TCP, ERROR, "%s %s", "thread", ::strerror(errno));
         return false;
     }
 
-    CONNECT_LOG(TCP, 0, "%s %s", "connect", "ready");
+    CONNECT_LOG(TCP, INFO, "%s %s", "connect", "ready");
     return true;
 }
 //------------------------------------------------------------------------------
@@ -354,18 +354,18 @@ bool Connection::ConnectUDP()
     thiz.socketUDP = Socket::socket(sockaddrSource.ss_family, SOCK_DGRAM, IPPROTO_UDP);
     if (thiz.socketUDP <= 0)
     {
-        CONNECT_LOG(UDP, -1, "%s %s", "socket", Socket::strerror(Socket::errno));
+        CONNECT_LOG(UDP, ERROR, "%s %s", "socket", Socket::strerror(Socket::errno));
         return false;
     }
 
     int enable = 1;
     if (Socket::setsockopt(thiz.socketUDP, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) < 0)
     {
-        CONNECT_LOG(UDP, -1, "%s %s", "setsockopt", "SO_REUSEADDR");
+        CONNECT_LOG(UDP, ERROR, "%s %s", "setsockopt", "SO_REUSEADDR");
     }
     if (Socket::setsockopt(thiz.socketUDP, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable)) < 0)
     {
-        CONNECT_LOG(UDP, -1, "%s %s", "setsockopt", "SO_REUSEPORT");
+        CONNECT_LOG(UDP, ERROR, "%s %s", "setsockopt", "SO_REUSEPORT");
     }
 
 #if defined(__linux__)
@@ -383,13 +383,13 @@ bool Connection::ConnectUDP()
     };
     if (Socket::setsockopt(thiz.socketUDP, SOL_SOCKET, SO_ATTACH_REUSEPORT_CBPF, &cbpf, sizeof(cbpf)) < 0)
     {
-        CONNECT_LOG(UDP, -1, "%s %s", "setsockopt", "SO_ATTACH_REUSEPORT_CBPF");
+        CONNECT_LOG(UDP, ERROR, "%s %s", "setsockopt", "SO_ATTACH_REUSEPORT_CBPF");
     }
 #endif
 
-    if (Socket::bind(thiz.socketUDP, (struct sockaddr*)&sockaddrSource, sockaddSourceLength) < 0)
+    if (Socket::bind(thiz.socketUDP, reinterpret_cast<struct sockaddr*>(&sockaddrSource), sockaddSourceLength) < 0)
     {
-        CONNECT_LOG(UDP, -1, "%s %s", "bind", Socket::strerror(Socket::errno));
+        CONNECT_LOG(UDP, ERROR, "%s %s", "bind", Socket::strerror(Socket::errno));
         Socket::close(thiz.socketUDP);
         thiz.socketUDP = 0;
         return false;
@@ -397,9 +397,9 @@ bool Connection::ConnectUDP()
 
     struct sockaddr_storage sockaddrDestination = {};
     socklen_t sockaddrDestinationLength = SetAddressPort(sockaddrDestination, thiz.destinationAddress, thiz.destinationPort);
-    if (Socket::connect(thiz.socketUDP, (struct sockaddr*)&sockaddrDestination, sockaddrDestinationLength) < 0)
+    if (Socket::connect(thiz.socketUDP, reinterpret_cast<struct sockaddr*>(&sockaddrDestination), sockaddrDestinationLength) < 0)
     {
-        CONNECT_LOG(UDP, -1, "%s %s", "connect", Socket::strerror(Socket::errno));
+        CONNECT_LOG(UDP, ERROR, "%s %s", "connect", Socket::strerror(Socket::errno));
         Socket::close(thiz.socketUDP);
         thiz.socketUDP = 0;
         return false;
@@ -409,11 +409,11 @@ bool Connection::ConnectUDP()
     thiz.threadSendUDP = std::stacking_thread(65536, [this]{ thiz.ProcedureSendUDP(); });
     if (thiz.threadRecvUDP.joinable() == false || thiz.threadSendUDP.joinable() == false)
     {
-        CONNECT_LOG(UDP, -1, "%s %s", "thread", ::strerror(errno));
+        CONNECT_LOG(UDP, ERROR, "%s %s", "thread", ::strerror(errno));
         return false;
     }
 
-    CONNECT_LOG(UDP, 0, "%s %s", "connect", "ready");
+    CONNECT_LOG(UDP, INFO, "%s %s", "connect", "ready");
     return true;
 }
 //------------------------------------------------------------------------------
@@ -452,11 +452,11 @@ void Connection::Recv(const Buffer::element_type& buffer, int mode)
 {
     if (mode == MODE_UDP)
     {
-        CONNECT_LOG(UDP, 0, "%s %zd", "recv", buffer.size());
+        CONNECT_LOG(UDP, INFO, "%s %zd", "recv", buffer.size());
     }
     else if (mode == MODE_TCP)
     {
-        CONNECT_LOG(TCP, 0, "%s %zd", "recv", buffer.size());
+        CONNECT_LOG(TCP, INFO, "%s %zd", "recv", buffer.size());
     }
 }
 //------------------------------------------------------------------------------
@@ -484,22 +484,22 @@ void Connection::GetAddressPort(const struct sockaddr_storage& addr, char*& addr
 {
     if (addr.ss_family == AF_INET)
     {
-        sockaddr_in& sa = *(sockaddr_in*)&addr;
+        const struct sockaddr_in& sa = reinterpret_cast<const struct sockaddr_in&>(addr);
 
-        address = (char*)::realloc(address, INET_ADDRSTRLEN);
+        address = static_cast<char*>(::realloc(address, INET_ADDRSTRLEN));
         ::inet_ntop(AF_INET, &sa.sin_addr, address, INET_ADDRSTRLEN);
 
-        port = (char*)::realloc(port, 8);
+        port = static_cast<char*>(::realloc(port, 8));
         ::snprintf(port, 8, "%u", ntohs(sa.sin_port));
     }
     else if (addr.ss_family == AF_INET6)
     {
-        sockaddr_in6& sa = *(sockaddr_in6*)&addr;
+        const struct sockaddr_in6& sa = reinterpret_cast<const struct sockaddr_in6&>(addr);
 
-        address = (char*)::realloc(address, INET6_ADDRSTRLEN);
+        address = static_cast<char*>(::realloc(address, INET6_ADDRSTRLEN));
         ::inet_ntop(AF_INET6, &sa.sin6_addr, address, INET6_ADDRSTRLEN);
 
-        port = (char*)::realloc(port, 8);
+        port = static_cast<char*>(::realloc(port, 8));
         ::snprintf(port, 8, "%u", ntohs(sa.sin6_port));
     }
 }
@@ -511,7 +511,7 @@ int Connection::SetAddressPort(struct sockaddr_storage& addr, const char* addres
 
     if (strchr(address, '.'))
     {
-        sockaddr_in& sa = *(sockaddr_in*)&addr;
+        struct sockaddr_in& sa = reinterpret_cast<struct sockaddr_in&>(addr);
 
         sa = sockaddr_in{};
 #if defined(__APPLE__)
@@ -525,7 +525,7 @@ int Connection::SetAddressPort(struct sockaddr_storage& addr, const char* addres
     }
     else if (strchr(address, ':'))
     {
-        sockaddr_in6& sa = *(sockaddr_in6*)&addr;
+        struct sockaddr_in6& sa = reinterpret_cast<struct sockaddr_in6&>(addr);
 
         sa = sockaddr_in6{};
 #if defined(__APPLE__)

@@ -33,22 +33,27 @@ void Log::DefaultFormat(int level, const char* format, ...)
 {
     time_t now = ::time(0);
     struct tm tm;
-    ::gmtime_r(&now, &tm);
+    ::localtime_r(&now, &tm);
 
     char timestamp[32];
     ::strftime(timestamp, 32, "%Y-%m-%d %H:%M:%S", &tm);
 
-    char replaceFormat[256];
-    switch (level)
+    static const char* const levelName[DEBUG - FATAL + 1] =
     {
-    case -1:
-        ::snprintf(replaceFormat, 256, "%s [%s] %s\n", timestamp, "ERROR", format);
-        break;
+        "FATAL",
+        "ERROR",
+        "WARNING",
+        "INFO",
+        "DEBUG",
+    };
 
-    default:
-        ::snprintf(replaceFormat, 256, "%s [%s] %s\n", timestamp, "INFO", format);
-        break;
-    }
+    if (level < FATAL)
+        level = FATAL;
+    else if (level > DEBUG)
+        level = DEBUG;
+
+    char replaceFormat[256];
+    ::snprintf(replaceFormat, 256, "%s [%s] %s\n", timestamp, levelName[level - FATAL], format);
 
     va_list va;
     va_start(va, format);
@@ -60,7 +65,7 @@ void Log::DefaultFormat(int level, const char* format, ...)
 
     va_list vaOutput;
     va_copy(vaOutput, va);
-    char* buffer = (char*)alloca(count + 1);
+    char* buffer = static_cast<char*>(::alloca(count + 1));
     ::vsnprintf(buffer, count + 1, replaceFormat, vaOutput);
     Log::Output(level, buffer);
     va_end(vaOutput);

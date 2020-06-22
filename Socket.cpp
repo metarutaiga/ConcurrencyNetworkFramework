@@ -21,8 +21,10 @@ int (*Socket::getsockname)(int socket, struct sockaddr* name, socklen_t* namelen
 int (*Socket::getsockopt)(int socket, int level, int optname, void* optval, socklen_t* optlen) = ::getsockopt;
 int (*Socket::listen)(int socket, int backlog) = ::listen;
 ssize_t (*Socket::recv)(int socket, void* buf, size_t len, int flags) = Socket::recvloop;
+ssize_t (*Socket::recvfrom)(int socket, void* buf, size_t len, int flags, struct sockaddr* addr, socklen_t* addrlen) = ::recvfrom;
 int (*Socket::setsockopt)(int socket, int level, int optname, const void* optval, socklen_t optlen) = ::setsockopt;
-ssize_t (*Socket::send)(int socket, const void* buf, size_t len, int flags, char so_temp[Socket::CORK_SIZE]) = Socket::sendloopcork;
+ssize_t (*Socket::send)(int socket, const void* buf, size_t len, int flags, char so_temp[Socket::CORK_SIZE]) = Socket::sendloop;
+ssize_t (*Socket::sendto)(int socket, const void* buf, size_t len, int flags, const struct sockaddr* name, socklen_t namelen) = ::sendto;
 int (*Socket::shutdown)(int socket, int flags) = ::shutdown;
 int (*Socket::socket)(int af, int type, int protocol) = ::socket;
 char* (*Socket::strerror)(int errnum) = ::strerror;
@@ -39,10 +41,7 @@ int Socket::acceptloop(int socket, struct sockaddr* addr, socklen_t* addrlen)
             break;
         if (Socket::errno == EAGAIN || Socket::errno == EWOULDBLOCK || Socket::errno == EINTR)
         {
-            struct timespec timespec;
-            timespec.tv_sec = 0;
-            timespec.tv_nsec = 1000 * 1000 * 1000 / 60;
-            ::nanosleep(&timespec, nullptr);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000 / 60));
             continue;
         }
         break;
@@ -60,10 +59,7 @@ ssize_t Socket::recvloop(int socket, void* buf, size_t len, int flags)
             break;
         if (Socket::errno == EAGAIN || Socket::errno == EWOULDBLOCK || Socket::errno == EINTR)
         {
-            struct timespec timespec;
-            timespec.tv_sec = 0;
-            timespec.tv_nsec = 1000 * 1000 * 1000 / 60;
-            ::nanosleep(&timespec, nullptr);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000 / 60));
             continue;
         }
         break;
@@ -71,14 +67,14 @@ ssize_t Socket::recvloop(int socket, void* buf, size_t len, int flags)
     return result;
 }
 //------------------------------------------------------------------------------
-ssize_t Socket::sendloopcork(int socket, const void* buf, size_t len, int flags, char corkbuf[Socket::CORK_SIZE])
+ssize_t Socket::sendloop(int socket, const void* buf, size_t len, int flags, char corkbuf[Socket::CORK_SIZE])
 {
     struct CORK
     {
         unsigned int length;
         char buffer[Socket::CORK_SIZE - sizeof(int)];
     };
-    CORK& cork = *(CORK*)corkbuf;
+    CORK& cork = reinterpret_cast<CORK&>(*corkbuf);
 
     if (flags & MSG_MORE || cork.length)
     {
@@ -86,7 +82,7 @@ ssize_t Socket::sendloopcork(int socket, const void* buf, size_t len, int flags,
         {
             unsigned int length = cork.length;
             cork.length = 0;
-            ssize_t result = sendloopcork(socket, cork.buffer, length, flags & ~MSG_MORE, corkbuf);
+            ssize_t result = sendloop(socket, cork.buffer, length, flags & ~MSG_MORE, corkbuf);
             if (result < 0)
                 return result;
         }
@@ -98,8 +94,8 @@ ssize_t Socket::sendloopcork(int socket, const void* buf, size_t len, int flags,
                 return len;
             buf = cork.buffer;
             len = cork.length;
+            flags &= ~MSG_MORE;
             cork.length = 0;
-            return sendloopcork(socket, buf, len, flags & ~MSG_MORE, corkbuf);
         }
     }
 
@@ -111,10 +107,7 @@ ssize_t Socket::sendloopcork(int socket, const void* buf, size_t len, int flags,
             break;
         if (Socket::errno == EAGAIN || Socket::errno == EWOULDBLOCK || Socket::errno == EINTR)
         {
-            struct timespec timespec;
-            timespec.tv_sec = 0;
-            timespec.tv_nsec = 1000 * 1000 * 1000 / 60;
-            ::nanosleep(&timespec, nullptr);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000 / 60));
             continue;
         }
         break;

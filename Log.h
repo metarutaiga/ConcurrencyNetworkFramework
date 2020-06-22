@@ -9,6 +9,15 @@
 class Log
 {
 public:
+    enum
+    {
+        FATAL   = -2,
+        ERROR   = -1,
+        WARNING = 0,
+        INFO    = 1,
+        DEBUG   = 2,
+    };
+public:
     static void (*Output)(int level, const char* output);
     static void (*Format)(int level, const char* format, ...) __attribute__((format(printf, 2, 3)));
 public:

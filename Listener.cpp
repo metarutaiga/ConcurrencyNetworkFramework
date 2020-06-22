@@ -16,7 +16,7 @@
 #include "Listener.h"
 
 #define LISTEN_LOG(level, format, ...) \
-    Log::Format(level, "%s %d (%s:%s) : " format, "Listen", socket, thiz.address, thiz.port, __VA_ARGS__)
+    Log::Format(Log::level, "%s %d (%s:%s) : " format, "Listen", socket, thiz.address, thiz.port, __VA_ARGS__)
 
 //------------------------------------------------------------------------------
 Listener::Listener(const char* address, const char* port, int backlog)
@@ -51,22 +51,22 @@ void Listener::ProcedureListen(int socket)
 
     while (Base::Terminating() == false)
     {
-        struct sockaddr_storage addr = {};
-        socklen_t size = sizeof(addr);
-        int id = Socket::accept(socket, (struct sockaddr*)&addr, &size);
+        struct sockaddr_storage sockaddr = {};
+        socklen_t sockaddrLength = sizeof(sockaddr);
+        int id = Socket::accept(socket, reinterpret_cast<struct sockaddr*>(&sockaddr), &sockaddrLength);
         if (id <= 0 || Base::Terminating())
         {
-            LISTEN_LOG(-1, "%s %s", "accept", Socket::strerror(Socket::errno));
+            LISTEN_LOG(ERROR, "%s %s", "accept", Socket::strerror(Socket::errno));
             break;
         }
         char* address = nullptr;
         char* port = nullptr;
-        Connection::GetAddressPort(addr, address, port);
-        LISTEN_LOG(0, "%s %d (%s:%s)", "accept", id, address, port);
+        Connection::GetAddressPort(sockaddr, address, port);
+        LISTEN_LOG(INFO, "%s %d (%s:%s)", "accept", id, address, port);
         ::free(address);
         ::free(port);
 
-        Connection* connection = CreateConnection(id, addr);
+        Connection* connection = CreateConnection(id, sockaddr);
         if (connection == nullptr)
         {
             Socket::close(id);
@@ -107,18 +107,18 @@ bool Listener::Start(size_t count)
         int socket = Socket::socket(sockaddr.ss_family, SOCK_STREAM, IPPROTO_TCP);
         if (socket <= 0)
         {
-            LISTEN_LOG(-1, "%s %s", "socket", Socket::strerror(Socket::errno));
+            LISTEN_LOG(ERROR, "%s %s", "socket", Socket::strerror(Socket::errno));
             continue;
         }
 
         int enable = 1;
         if (Socket::setsockopt(socket, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) < 0)
         {
-            LISTEN_LOG(-1, "%s %s", "setsockopt", "SO_REUSEADDR");
+            LISTEN_LOG(ERROR, "%s %s", "setsockopt", "SO_REUSEADDR");
         }
         if (Socket::setsockopt(socket, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable)) < 0)
         {
-            LISTEN_LOG(-1, "%s %s", "setsockopt", "SO_REUSEPORT");
+            LISTEN_LOG(ERROR, "%s %s", "setsockopt", "SO_REUSEPORT");
         }
 
 #if defined(__linux__)
@@ -136,20 +136,20 @@ bool Listener::Start(size_t count)
         };
         if (Socket::setsockopt(socket, SOL_SOCKET, SO_ATTACH_REUSEPORT_CBPF, &cbpf, sizeof(cbpf)) < 0)
         {
-            LISTEN_LOG(-1, "%s %s", "setsockopt", "SO_ATTACH_REUSEPORT_CBPF");
+            LISTEN_LOG(ERROR, "%s %s", "setsockopt", "SO_ATTACH_REUSEPORT_CBPF");
         }
 #endif
 
-        if (Socket::bind(socket, (struct sockaddr*)&sockaddr, sockaddrLength) < 0)
+        if (Socket::bind(socket, reinterpret_cast<struct sockaddr*>(&sockaddr), sockaddrLength) < 0)
         {
-            LISTEN_LOG(-1, "%s %s", "bind", Socket::strerror(Socket::errno));
+            LISTEN_LOG(ERROR, "%s %s", "bind", Socket::strerror(Socket::errno));
             Socket::close(socket);
             continue;
         }
 
         if (Socket::listen(socket, thiz.backlog) < 0)
         {
-            LISTEN_LOG(-1, "%s %s", "listen", Socket::strerror(Socket::errno));
+            LISTEN_LOG(ERROR, "%s %s", "listen", Socket::strerror(Socket::errno));
             Socket::close(socket);
             continue;
         }
@@ -157,14 +157,14 @@ bool Listener::Start(size_t count)
         thiz.threadListen.emplace_back(std::stacking_thread(65536, [this, socket]{ thiz.ProcedureListen(socket); }));
         if (thiz.threadListen.back().joinable() == false)
         {
-            LISTEN_LOG(-1, "%s %s", "thread", ::strerror(errno));
+            LISTEN_LOG(ERROR, "%s %s", "thread", ::strerror(errno));
             thiz.threadListen.pop_back();
             Socket::close(socket);
             continue;
         }
         thiz.socket.emplace_back(socket);
 
-        LISTEN_LOG(0, "%s %s", "listen", "ready");
+        LISTEN_LOG(INFO, "%s %s", "listen", "ready");
     }
 
     return true;

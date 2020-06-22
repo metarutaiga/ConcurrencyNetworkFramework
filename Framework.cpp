@@ -45,18 +45,18 @@ int Framework::Dispatch(size_t listenCount)
 {
     std::vector<Event*> eventLocal;
 
-    Log::Format(0, "Framework : Start");
+    Log::Format(Log::INFO, "Framework : Start");
     for (Listener* server : thiz.serverArray)
     {
         server->Start(listenCount);
     }
 
-    Log::Format(0, "Framework : Loop");
+    Log::Format(Log::INFO, "Framework : Loop");
     while (Base::Terminating() == false)
     {
         if (thiz.eventSemaphore.try_acquire_for(std::chrono::seconds(60)) == false)
         {
-            Log::Format(0, "Framework : Idle (%d/%d/%d/%d/%d/%d)",
+            Log::Format(Log::INFO, "Framework : Idle (%d/%d/%d/%d/%d/%d)",
                         Connection::GetActiveThreadCount(0),
                         Connection::GetActiveThreadCount(1),
                         Connection::GetActiveThreadCount(2),
@@ -76,7 +76,7 @@ int Framework::Dispatch(size_t listenCount)
         }
         eventLocal.clear();
     }
-    Log::Format(0, "Framework : Shutdown");
+    Log::Format(Log::INFO, "Framework : Shutdown");
 
     for (Listener* server : thiz.serverArray)
     {
@@ -93,7 +93,7 @@ int Framework::Dispatch(size_t listenCount)
     }
     eventLocal.clear();
 
-    Log::Format(0, "Framework : Terminate");
+    Log::Format(Log::INFO, "Framework : Terminate");
     return 0;
 }
 //------------------------------------------------------------------------------
