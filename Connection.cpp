@@ -168,7 +168,7 @@ void Connection::ProcedureRecvTCP()
         }
 
         ProcessRecvTCP(buffer, buffer);
-        Recv(buffer);
+        Recv(buffer, USE_TCP);
     }
     Base::Terminate();
 
@@ -258,9 +258,8 @@ void Connection::ProcedureRecvUDP()
         buffer.resize(size);
 
         ProcessRecvUDP(buffer, buffer);
-        Recv(buffer);
+        Recv(buffer, USE_UDP);
     }
-    Base::Terminate();
 
     thiz.readyUDP = false;
 
@@ -306,7 +305,6 @@ void Connection::ProcedureSendUDP()
 
         thiz.sendBufferSemaphoreUDP.acquire();
     }
-    Base::Terminate();
 
     thiz.readyUDP = false;
 
@@ -429,12 +427,12 @@ void Connection::Disconnect()
     std::thread([this]{ delete this; }).detach();
 }
 //------------------------------------------------------------------------------
-void Connection::Send(const Buffer& buffer)
+void Connection::Send(const Buffer& buffer, int mode)
 {
     if (Base::Terminating())
         return;
 
-    if (thiz.readyUDP && (*buffer).size() <= UDP_MAX_SIZE)
+    if (thiz.readyUDP && (mode != USE_TCP && (*buffer).size() <= UDP_MAX_SIZE))
     {
         thiz.sendBufferMutexUDP.lock();
         thiz.sendBufferUDP.emplace_back(buffer);
@@ -450,13 +448,13 @@ void Connection::Send(const Buffer& buffer)
     }
 }
 //------------------------------------------------------------------------------
-void Connection::Recv(const Buffer::element_type& buffer)
+void Connection::Recv(const Buffer::element_type& buffer, int mode)
 {
-    if (thiz.readyUDP && buffer.size() <= UDP_MAX_SIZE)
+    if (mode == USE_UDP)
     {
         CONNECT_LOG(UDP, 0, "%s %zd", "recv", buffer.size());
     }
-    else if (thiz.readyTCP)
+    else if (mode == USE_TCP)
     {
         CONNECT_LOG(TCP, 0, "%s %zd", "recv", buffer.size());
     }

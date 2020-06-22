@@ -46,6 +46,14 @@ protected:
     virtual ~Connection();
 
 public:
+    enum
+    {
+        AUTO     = 0x0,
+        USE_TCP  = 0x1,
+        USE_UDP  = 0x2, 
+    };
+
+public:
     Connection(int socket, const char* address, const char* port, const struct sockaddr_storage& addr);
     Connection(const char* address, const char* port);
 
@@ -54,8 +62,8 @@ public:
     virtual bool Alive();
     virtual void Disconnect();
 
-    virtual void Send(const Buffer& buffer);
-    virtual void Recv(const Buffer::element_type& buffer);
+    virtual void Send(const Buffer& buffer, int mode = AUTO);
+    virtual void Recv(const Buffer::element_type& buffer, int mode = AUTO);
 
     virtual void ProcessSendTCP(const Buffer::element_type& source, Buffer::element_type& destination);
     virtual void ProcessRecvTCP(const Buffer::element_type& source, Buffer::element_type& destination);

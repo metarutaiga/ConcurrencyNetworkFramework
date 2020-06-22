@@ -1,7 +1,7 @@
 CXX=clang++
 CXXFLAGS=-O3 -g -std=c++11 -stdlib=libc++
 
-SRCS=Buffer.cpp Connection.cpp Framework.cpp Listener.cpp Log.cpp Socket.cpp
+SRCS=Base.cpp Buffer.cpp Connection.cpp Framework.cpp Listener.cpp Log.cpp Socket.cpp
 OBJS=$(SRCS:.cpp=.o)
 DEPS=$(OBJS:.o=.d)
 libConcurrencyNetworkFramework.a: $(OBJS)
