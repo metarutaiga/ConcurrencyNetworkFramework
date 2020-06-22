@@ -168,7 +168,7 @@ void Connection::ProcedureRecvTCP()
         }
 
         ProcessRecvTCP(buffer, buffer);
-        Recv(buffer, USE_TCP);
+        Recv(buffer, MODE_TCP);
     }
     Base::Terminate();
 
@@ -258,7 +258,7 @@ void Connection::ProcedureRecvUDP()
         buffer.resize(size);
 
         ProcessRecvUDP(buffer, buffer);
-        Recv(buffer, USE_UDP);
+        Recv(buffer, MODE_UDP);
     }
 
     thiz.readyUDP = false;
@@ -432,7 +432,7 @@ void Connection::Send(const Buffer& buffer, int mode)
     if (Base::Terminating())
         return;
 
-    if (thiz.readyUDP && (mode != USE_TCP && (*buffer).size() <= UDP_MAX_SIZE))
+    if (thiz.readyUDP && (mode != MODE_TCP && (*buffer).size() <= UDP_MAX_SIZE))
     {
         thiz.sendBufferMutexUDP.lock();
         thiz.sendBufferUDP.emplace_back(buffer);
@@ -450,11 +450,11 @@ void Connection::Send(const Buffer& buffer, int mode)
 //------------------------------------------------------------------------------
 void Connection::Recv(const Buffer::element_type& buffer, int mode)
 {
-    if (mode == USE_UDP)
+    if (mode == MODE_UDP)
     {
         CONNECT_LOG(UDP, 0, "%s %zd", "recv", buffer.size());
     }
-    else if (mode == USE_TCP)
+    else if (mode == MODE_TCP)
     {
         CONNECT_LOG(TCP, 0, "%s %zd", "recv", buffer.size());
     }

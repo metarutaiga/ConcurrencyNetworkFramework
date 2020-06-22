@@ -48,9 +48,9 @@ protected:
 public:
     enum
     {
-        AUTO     = 0x0,
-        USE_TCP  = 0x1,
-        USE_UDP  = 0x2, 
+        MODE_UDP    = 0x0,
+        MODE_TCP    = 0x1,
+        MODE_AUTO   = 0xF,
     };
 
 public:
@@ -62,8 +62,8 @@ public:
     virtual bool Alive();
     virtual void Disconnect();
 
-    virtual void Send(const Buffer& buffer, int mode = AUTO);
-    virtual void Recv(const Buffer::element_type& buffer, int mode = AUTO);
+    virtual void Send(const Buffer& buffer, int mode = MODE_AUTO);
+    virtual void Recv(const Buffer::element_type& buffer, int mode = MODE_AUTO);
 
     virtual void ProcessSendTCP(const Buffer::element_type& source, Buffer::element_type& destination);
     virtual void ProcessRecvTCP(const Buffer::element_type& source, Buffer::element_type& destination);
