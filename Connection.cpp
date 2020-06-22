@@ -140,10 +140,12 @@ void Connection::ProcedureRecvTCP()
 {
     Connection::activeThreadCount[0].fetch_add(1, std::memory_order_acq_rel);
 
-    Buffer::element_type buffer;
+    Buffer recvBuffer = Buffer::Get();
 
-    while (Base::Terminating() == false)
+    while (Base::Terminating() == false && recvBuffer)
     {
+        Buffer::element_type& buffer = (*recvBuffer);
+
         // Length
         unsigned short size = 0;
         if (Socket::recv(thiz.socketTCP, &size, sizeof(short), MSG_WAITALL | MSG_NOSIGNAL) <= 0)
@@ -168,7 +170,7 @@ void Connection::ProcedureRecvTCP()
         }
 
         ProcessRecvTCP(buffer, buffer);
-        Recv(buffer, MODE_TCP);
+        Recv(recvBuffer, MODE_TCP);
     }
     Base::Terminate();
 
@@ -181,21 +183,22 @@ void Connection::ProcedureSendTCP()
 {
     Connection::activeThreadCount[1].fetch_add(1, std::memory_order_acq_rel);
 
+    bool disconnect = false;
     Buffer::element_type buffer;
     char cork[Socket::CORK_SIZE] = {};
+    std::vector<Buffer> sendBufferTCPLocal;
 
-    while (Base::Terminating() == false)
+    while (Base::Terminating() == false && disconnect == false)
     {
-        Buffer sendBuffer;
+        thiz.sendBufferSemaphoreTCP.acquire();
         thiz.sendBufferMutexTCP.lock();
-        if (thiz.sendBufferTCP.empty() == false)
-        {
-            thiz.sendBufferTCP.front().swap(sendBuffer);
-            thiz.sendBufferTCP.erase(thiz.sendBufferTCP.begin());
-        }
+        thiz.sendBufferTCP.swap(sendBufferTCPLocal);
         thiz.sendBufferMutexTCP.unlock();
-        if (sendBuffer)
+        for (const Buffer& sendBuffer : sendBufferTCPLocal)
         {
+            if (sendBuffer.get() == nullptr)
+                continue;
+
             ProcessSendTCP((*sendBuffer), buffer);
             if (buffer.size() <= USHRT_MAX)
             {
@@ -203,6 +206,7 @@ void Connection::ProcedureSendTCP()
                 unsigned short size = (short)buffer.size();
                 if (Socket::send(thiz.socketTCP, &size, sizeof(short), MSG_WAITALL | MSG_NOSIGNAL | MSG_MORE, cork) <= 0)
                 {
+                    disconnect = true;
                     CONNECT_LOG(TCP, ERROR, "%s %s", "send", Socket::strerror(Socket::errno));
                     break;
                 }
@@ -217,6 +221,7 @@ void Connection::ProcedureSendTCP()
                 // Data
                 if (Socket::send(thiz.socketTCP, &buffer.front(), size, MSG_WAITALL | MSG_NOSIGNAL, cork) <= 0)
                 {
+                    disconnect = true;
                     CONNECT_LOG(TCP, ERROR, "%s %s", "send", Socket::strerror(Socket::errno));
                     break;
                 }
@@ -226,10 +231,7 @@ void Connection::ProcedureSendTCP()
                 CONNECT_LOG(TCP, ERROR, "%s %s %zd", "send", "buffer too long", buffer.size());
             }
         }
-        if (thiz.sendBufferTCP.empty() == false)
-            continue;
-
-        thiz.sendBufferSemaphoreTCP.acquire();
+        sendBufferTCPLocal.clear();
     }
     Base::Terminate();
 
@@ -242,10 +244,11 @@ void Connection::ProcedureRecvUDP()
 {
     Connection::activeThreadCount[2].fetch_add(1, std::memory_order_acq_rel);
 
-    Buffer::element_type buffer;
+    Buffer recvBuffer = Buffer::Get();
 
-    while (Base::Terminating() == false)
+    while (Base::Terminating() == false && recvBuffer)
     {
+        Buffer::element_type& buffer = (*recvBuffer);
         buffer.resize(UDP_MAX_SIZE);
 
         // Data
@@ -258,7 +261,7 @@ void Connection::ProcedureRecvUDP()
         buffer.resize(size);
 
         ProcessRecvUDP(buffer, buffer);
-        Recv(buffer, MODE_UDP);
+        Recv(recvBuffer, MODE_UDP);
     }
 
     thiz.readyUDP = false;
@@ -270,27 +273,29 @@ void Connection::ProcedureSendUDP()
 {
     Connection::activeThreadCount[3].fetch_add(1, std::memory_order_acq_rel);
 
+    bool disconnect = false;
     Buffer::element_type buffer;
     char cork[Socket::CORK_SIZE] = {};
+    std::vector<Buffer> sendBufferUDPLocal;
 
-    while (Base::Terminating() == false)
+    while (Base::Terminating() == false && disconnect == false)
     {
-        Buffer sendBuffer;
+        thiz.sendBufferSemaphoreUDP.acquire();
         thiz.sendBufferMutexUDP.lock();
-        if (thiz.sendBufferUDP.empty() == false)
-        {
-            thiz.sendBufferUDP.front().swap(sendBuffer);
-            thiz.sendBufferUDP.erase(thiz.sendBufferUDP.begin());
-        }
+        thiz.sendBufferUDP.swap(sendBufferUDPLocal);
         thiz.sendBufferMutexUDP.unlock();
-        if (sendBuffer)
+        for (const Buffer& sendBuffer : sendBufferUDPLocal)
         {
+            if (sendBuffer.get() == nullptr)
+                continue;
+
             ProcessSendUDP((*sendBuffer), buffer);
             if (buffer.size() <= UDP_MAX_SIZE)
             {
                 // Data
                 if (Socket::send(thiz.socketUDP, &buffer.front(), buffer.size(), MSG_WAITALL | MSG_NOSIGNAL, cork) <= 0)
                 {
+                    disconnect = true;
                     CONNECT_LOG(UDP, ERROR, "%s %s", "send", Socket::strerror(Socket::errno));
                     break;
                 }
@@ -300,10 +305,7 @@ void Connection::ProcedureSendUDP()
                 CONNECT_LOG(UDP, ERROR, "%s %s %zd", "send", "buffer too long", buffer.size());
             }
         }
-        if (thiz.sendBufferUDP.empty() == false)
-            continue;
-
-        thiz.sendBufferSemaphoreUDP.acquire();
+        sendBufferUDPLocal.clear();
     }
 
     thiz.readyUDP = false;
@@ -427,36 +429,39 @@ void Connection::Disconnect()
     std::thread([this]{ delete this; }).detach();
 }
 //------------------------------------------------------------------------------
-void Connection::Send(const Buffer& buffer, int mode)
+void Connection::Send(const Buffer& sendBuffer, int mode)
 {
     if (Base::Terminating())
         return;
 
-    if (thiz.readyUDP && (mode != MODE_TCP && (*buffer).size() <= UDP_MAX_SIZE))
+    if (thiz.readyUDP && (mode != MODE_TCP && (*sendBuffer).size() <= UDP_MAX_SIZE))
     {
         thiz.sendBufferMutexUDP.lock();
-        thiz.sendBufferUDP.emplace_back(buffer);
+        thiz.sendBufferUDP.emplace_back(sendBuffer);
         thiz.sendBufferMutexUDP.unlock();
         thiz.sendBufferSemaphoreUDP.release();
     }
     else if (thiz.readyTCP)
     {
         thiz.sendBufferMutexTCP.lock();
-        thiz.sendBufferTCP.emplace_back(buffer);
+        thiz.sendBufferTCP.emplace_back(sendBuffer);
         thiz.sendBufferMutexTCP.unlock();
         thiz.sendBufferSemaphoreTCP.release();
     }
 }
 //------------------------------------------------------------------------------
-void Connection::Recv(const Buffer::element_type& buffer, int mode)
+void Connection::Recv(const Buffer& recvBuffer, int mode)
 {
+    if (recvBuffer.get() == nullptr)
+        return;
+
     if (mode == MODE_UDP)
     {
-        CONNECT_LOG(UDP, INFO, "%s %zd", "recv", buffer.size());
+        CONNECT_LOG(UDP, INFO, "%s %zd", "recv", (*recvBuffer).size());
     }
     else if (mode == MODE_TCP)
     {
-        CONNECT_LOG(TCP, INFO, "%s %zd", "recv", buffer.size());
+        CONNECT_LOG(TCP, INFO, "%s %zd", "recv", (*recvBuffer).size());
     }
 }
 //------------------------------------------------------------------------------
@@ -543,7 +548,7 @@ int Connection::SetAddressPort(struct sockaddr_storage& addr, const char* addres
 //------------------------------------------------------------------------------
 int Connection::GetActiveThreadCount(int index)
 {
-    if (index < 0 || index > 4)
+    if (index < 0 || index >= 4)
         return 0;
 
     return Connection::activeThreadCount[index];

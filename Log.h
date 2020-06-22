@@ -9,7 +9,7 @@
 class Log
 {
 public:
-    enum
+    enum Level
     {
         FATAL   = -2,
         ERROR   = -1,
