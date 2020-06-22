@@ -21,7 +21,6 @@
 //------------------------------------------------------------------------------
 Listener::Listener(const char* address, const char* port, int backlog)
 {
-    thiz.terminate = false;
     thiz.address = address ? ::strdup(address) : nullptr;
     thiz.port = port ? ::strdup(port) : ::strdup("7777");
     thiz.backlog = backlog;
@@ -50,12 +49,12 @@ void Listener::ProcedureListen(int socket)
 {
     std::vector<Connection*> connectionLocal;
 
-    while (thiz.terminate == false)
+    while (Base::Terminating() == false)
     {
         struct sockaddr_storage addr = {};
         socklen_t size = sizeof(addr);
         int id = Socket::accept(socket, (struct sockaddr*)&addr, &size);
-        if (id <= 0 || thiz.terminate)
+        if (id <= 0 || Base::Terminating())
         {
             LISTEN_LOG(-1, "%s %s", "accept", Socket::strerror(Socket::errno));
             break;
@@ -96,8 +95,7 @@ void Listener::ProcedureListen(int socket)
         thiz.connectionArray.emplace_back(connection);
         thiz.connectionMutex.unlock();
     }
-
-    thiz.terminate = true;
+    Base::Terminate();
 }
 //------------------------------------------------------------------------------
 bool Listener::Start(size_t count)
@@ -174,7 +172,7 @@ bool Listener::Start(size_t count)
 //------------------------------------------------------------------------------
 void Listener::Stop()
 {
-    thiz.terminate = true;
+    Base::Terminate();
 
     for (int socket : thiz.socket)
     {

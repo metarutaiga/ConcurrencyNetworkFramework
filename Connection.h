@@ -57,6 +57,11 @@ public:
     virtual void Send(const Buffer& buffer);
     virtual void Recv(const Buffer::element_type& buffer);
 
+    virtual void ProcessSendTCP(const Buffer::element_type& source, Buffer::element_type& destination);
+    virtual void ProcessRecvTCP(const Buffer::element_type& source, Buffer::element_type& destination);
+    virtual void ProcessSendUDP(const Buffer::element_type& source, Buffer::element_type& destination);
+    virtual void ProcessRecvUDP(const Buffer::element_type& source, Buffer::element_type& destination);
+
     static void GetAddressPort(const struct sockaddr_storage& addr, char*& address, char*& port);
     static int SetAddressPort(struct sockaddr_storage& addr, const char* address, const char* port);
     static int GetActiveThreadCount(int index);

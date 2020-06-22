@@ -13,11 +13,11 @@ class Listener;
 class Framework : public Base
 {
 protected:
-    std::vector<Listener*> serverArray;
-
     std::counting_semaphore eventSemaphore;
     std::vector<Event*> eventArray;
     std::mutex eventMutex;
+
+    std::vector<Listener*> serverArray;
 
 public:
     Framework();
@@ -25,9 +25,8 @@ public:
 
     virtual void Terminate();
 
-    virtual void Server(Listener* server);
-
     virtual void Push(Event* event);
+    virtual void Server(Listener* server);
 
     virtual int Dispatch(size_t listenCount);
 };

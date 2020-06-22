@@ -16,5 +16,6 @@ protected:
 public:
     static void Clean();
     static Buffer Get(size_t size);
-    static size_t Count();
+    static int Used();
+    static int Unused();
 };

@@ -9,15 +9,25 @@
 //------------------------------------------------------------------------------
 Base::Base()
 {
-    
+    thiz.terminate = false;
 }
 //------------------------------------------------------------------------------
 Base::~Base()
 {
-    for (std::function<void()> f : thiz.delayDestroy)
+    for (std::function<void()>& f : thiz.delayDestroy)
     {
         f();
     }
+}
+//------------------------------------------------------------------------------
+void Base::Terminate()
+{
+    thiz.terminate = true;
+}
+//------------------------------------------------------------------------------
+bool Base::Terminating() const
+{
+    return thiz.terminate;
 }
 //------------------------------------------------------------------------------
 void Base::DelayDestroy(std::function<void()>&& f)

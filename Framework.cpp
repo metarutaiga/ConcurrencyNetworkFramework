@@ -5,6 +5,7 @@
 // https://github.com/metarutaiga/ConcurrencyNetworkFramework
 //==============================================================================
 #include "Buffer.h"
+#include "Connection.h"
 #include "Event.h"
 #include "Listener.h"
 #include "Log.h"
@@ -13,7 +14,7 @@
 //------------------------------------------------------------------------------
 Framework::Framework()
 {
-    thiz.terminate = false;
+
 }
 //------------------------------------------------------------------------------
 Framework::~Framework()
@@ -23,13 +24,8 @@ Framework::~Framework()
 //------------------------------------------------------------------------------
 void Framework::Terminate()
 {
-    thiz.terminate = true;
+    Base::Terminate();
     thiz.eventSemaphore.release();
-}
-//------------------------------------------------------------------------------
-void Framework::Server(Listener* server)
-{
-    thiz.serverArray.emplace_back(server);
 }
 //------------------------------------------------------------------------------
 void Framework::Push(Event* event)
@@ -38,6 +34,11 @@ void Framework::Push(Event* event)
     thiz.eventArray.emplace_back(event);
     thiz.eventMutex.unlock();
     thiz.eventSemaphore.release();
+}
+//------------------------------------------------------------------------------
+void Framework::Server(Listener* server)
+{
+    thiz.serverArray.emplace_back(server);
 }
 //------------------------------------------------------------------------------
 int Framework::Dispatch(size_t listenCount)
@@ -51,11 +52,17 @@ int Framework::Dispatch(size_t listenCount)
     }
 
     Log::Format(0, "Framework : Loop");
-    while (thiz.terminate == false)
+    while (Base::Terminating() == false)
     {
         if (thiz.eventSemaphore.try_acquire_for(std::chrono::seconds(60)) == false)
         {
-            Log::Format(0, "Framework : Idle");
+            Log::Format(0, "Framework : Idle (%d/%d/%d/%d/%d/%d)",
+                        Connection::GetActiveThreadCount(0),
+                        Connection::GetActiveThreadCount(1),
+                        Connection::GetActiveThreadCount(2),
+                        Connection::GetActiveThreadCount(3),
+                        Buffer::Used(),
+                        Buffer::Unused());
             continue;
         }
         thiz.eventMutex.lock();

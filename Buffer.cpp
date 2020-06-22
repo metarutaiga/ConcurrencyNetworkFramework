@@ -6,6 +6,7 @@
 //==============================================================================
 #include "Buffer.h"
 
+static std::atomic_int bufferPoolAllocated;
 static std::vector<Buffer> bufferPool;
 static std::mutex bufferPoolMutex;
 static bool bufferPoolTerminate;
@@ -13,6 +14,9 @@ static struct BufferPoolExit { ~BufferPoolExit() { bufferPoolTerminate = true; }
 //------------------------------------------------------------------------------
 void Buffer::Recycle(element_type* pointer)
 {
+    if (pointer == nullptr)
+        return;
+
     if (bufferPoolTerminate)
     {
         delete pointer;
@@ -27,6 +31,7 @@ void Buffer::Recycle(element_type* pointer)
 //------------------------------------------------------------------------------
 void Buffer::Clean()
 {
+    bufferPoolAllocated.exchange(0, std::memory_order_acq_rel);
     bufferPoolTerminate = true;
     bufferPoolMutex.lock();
     bufferPool.clear();
@@ -51,7 +56,11 @@ Buffer Buffer::Get(size_t size)
     if (pointer == nullptr)
     {
         pointer = new Buffer::element_type;
-        buffer.reset(pointer, Buffer::Recycle);
+        if (pointer)
+        {
+            buffer.reset(pointer, Buffer::Recycle);
+            bufferPoolAllocated.fetch_add(1, std::memory_order_acq_rel);
+        }
     }
     if (pointer)
     {
@@ -60,8 +69,13 @@ Buffer Buffer::Get(size_t size)
     return buffer;
 }
 //------------------------------------------------------------------------------
-size_t Buffer::Count()
+int Buffer::Used()
 {
-    return bufferPool.size();
+    return bufferPoolAllocated - (int)bufferPool.size();
+}
+//------------------------------------------------------------------------------
+int Buffer::Unused()
+{
+    return (int)bufferPool.size();
 }
 //------------------------------------------------------------------------------

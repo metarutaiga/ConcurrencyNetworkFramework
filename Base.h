@@ -10,7 +10,6 @@
 
 class Base
 {
-protected:
     volatile bool terminate;
 
     std::vector<std::function<void()>> delayDestroy;
@@ -19,5 +18,8 @@ protected:
     Base();
     virtual ~Base();
 
-    void DelayDestroy(std::function<void()>&& f);
+    virtual void Terminate();
+    virtual bool Terminating() const;
+
+    virtual void DelayDestroy(std::function<void()>&& f);
 };
