@@ -190,6 +190,8 @@ void Connection::ProcedureSendTCP()
         thiz.sendBufferMutexTCP.lock();
         thiz.sendBufferTCP.swap(sendBufferTCPLocal);
         thiz.sendBufferMutexTCP.unlock();
+        if (Base::Terminating())
+            break;
         for (const Buffer& sendBuffer : sendBufferTCPLocal)
         {
             if (sendBuffer == nullptr)
@@ -280,6 +282,8 @@ void Connection::ProcedureSendUDP()
         thiz.sendBufferMutexUDP.lock();
         thiz.sendBufferUDP.swap(sendBufferUDPLocal);
         thiz.sendBufferMutexUDP.unlock();
+        if (Base::Terminating())
+            break;
         for (const Buffer& sendBuffer : sendBufferUDPLocal)
         {
             if (sendBuffer == nullptr)
