@@ -46,12 +46,16 @@ protected:
     virtual ~Connection();
 
 public:
-    enum
+    enum Mode
     {
         MODE_UDP    = 0x0,
         MODE_TCP    = 0x1,
         MODE_AUTO   = 0xF,
     };
+
+    // For IPv4, EMTU_S is the smaller of 576 bytes and the first-hop MTU [RFC1122].
+    // For IPv6, EMTU_S is 1280 bytes [RFC2460].
+    enum { UDP_SIZE_MAX = 1280 };
 
 public:
     Connection(int socket, const char* address, const char* port, const struct sockaddr_storage& addr);

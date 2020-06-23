@@ -11,6 +11,9 @@
 #include "Log.h"
 #include "Framework.h"
 
+#define FRAMEWORK_LOG(level, format, ...) \
+    Log::Format(Log::level, "%s : " format, "Framework", __VA_ARGS__)
+
 //------------------------------------------------------------------------------
 Framework::Framework()
 {
@@ -45,24 +48,24 @@ int Framework::Dispatch(size_t listenCount)
 {
     std::vector<Event*> eventLocal;
 
-    Log::Format(Log::INFO, "Framework : Start");
+    FRAMEWORK_LOG(INFO, "%s", "Start");
     for (Listener* server : thiz.serverArray)
     {
         server->Start(listenCount);
     }
 
-    Log::Format(Log::INFO, "Framework : Loop");
+    FRAMEWORK_LOG(INFO, "%s", "Loop");
     while (Base::Terminating() == false)
     {
         if (thiz.eventSemaphore.try_acquire_for(std::chrono::seconds(60)) == false)
         {
-            Log::Format(Log::INFO, "Framework : Idle (%d/%d/%d/%d/%d/%d)",
-                        Connection::GetActiveThreadCount(0),
-                        Connection::GetActiveThreadCount(1),
-                        Connection::GetActiveThreadCount(2),
-                        Connection::GetActiveThreadCount(3),
-                        Buffer::Used(),
-                        Buffer::Unused());
+            FRAMEWORK_LOG(INFO, "Idle (%d/%d/%d/%d/%d/%d)",
+                          Connection::GetActiveThreadCount(0),
+                          Connection::GetActiveThreadCount(1),
+                          Connection::GetActiveThreadCount(2),
+                          Connection::GetActiveThreadCount(3),
+                          Buffer::Used(),
+                          Buffer::Unused());
             continue;
         }
         thiz.eventMutex.lock();
@@ -76,7 +79,7 @@ int Framework::Dispatch(size_t listenCount)
         }
         eventLocal.clear();
     }
-    Log::Format(Log::INFO, "Framework : Shutdown");
+    FRAMEWORK_LOG(INFO, "%s", "Shutdown");
 
     for (Listener* server : thiz.serverArray)
     {
@@ -93,7 +96,7 @@ int Framework::Dispatch(size_t listenCount)
     }
     eventLocal.clear();
 
-    Log::Format(Log::INFO, "Framework : Terminate");
+    FRAMEWORK_LOG(INFO, "%s", "Terminate");
     return 0;
 }
 //------------------------------------------------------------------------------

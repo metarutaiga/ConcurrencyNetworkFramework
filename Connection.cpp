@@ -14,10 +14,6 @@
 #include "Socket.h"
 #include "Connection.h"
 
-// For IPv4, EMTU_S is the smaller of 576 bytes and the first-hop MTU [RFC1122].
-// For IPv6, EMTU_S is 1280 bytes [RFC2460].
-#define UDP_MAX_SIZE    1280
-
 #define CONNECT_LOG(proto, level, format, ...) \
     Log::Format(Log::level, "%s %d (%s:%s:%s@%s:%s) : " format, "Connect", thiz.socket ## proto, #proto, thiz.sourceAddress, thiz.sourcePort, thiz.destinationAddress, thiz.destinationPort, __VA_ARGS__)
 
@@ -249,7 +245,7 @@ void Connection::ProcedureRecvUDP()
     while (Base::Terminating() == false && recvBuffer)
     {
         Buffer::element_type& buffer = (*recvBuffer);
-        buffer.resize(UDP_MAX_SIZE);
+        buffer.resize(UDP_SIZE_MAX);
 
         // Data
         long size = Socket::recv(thiz.socketUDP, &buffer.front(), buffer.size(), MSG_WAITALL | MSG_NOSIGNAL);
@@ -290,7 +286,7 @@ void Connection::ProcedureSendUDP()
                 continue;
 
             ProcessSendUDP((*sendBuffer), buffer);
-            if (buffer.size() <= UDP_MAX_SIZE)
+            if (buffer.size() <= UDP_SIZE_MAX)
             {
                 // Data
                 if (Socket::send(thiz.socketUDP, &buffer.front(), buffer.size(), MSG_WAITALL | MSG_NOSIGNAL, cork) <= 0)
@@ -434,7 +430,7 @@ void Connection::Send(const Buffer& sendBuffer, int mode)
     if (Base::Terminating())
         return;
 
-    if (thiz.readyUDP && (mode != MODE_TCP && (*sendBuffer).size() <= UDP_MAX_SIZE))
+    if (thiz.readyUDP && (mode != MODE_TCP && (*sendBuffer).size() <= UDP_SIZE_MAX))
     {
         thiz.sendBufferMutexUDP.lock();
         thiz.sendBufferUDP.emplace_back(sendBuffer);
