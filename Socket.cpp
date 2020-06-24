@@ -27,7 +27,7 @@ ssize_t (*Socket::send)(int socket, const void* buf, size_t len, int flags, char
 ssize_t (*Socket::sendto)(int socket, const void* buf, size_t len, int flags, const struct sockaddr* name, socklen_t namelen) = ::sendto;
 int (*Socket::shutdown)(int socket, int flags) = ::shutdown;
 int (*Socket::socket)(int af, int type, int protocol) = ::socket;
-char* (*Socket::strerror)(int errnum) = ::strerror;
+char* (*Socket::strerror)(int errnum) = Socket::strerrorloop;
 //------------------------------------------------------------------------------
 #define errno errno()
 //------------------------------------------------------------------------------
@@ -113,5 +113,12 @@ ssize_t Socket::sendloop(int socket, const void* buf, size_t len, int flags, cha
         break;
     }
     return result;
+}
+//------------------------------------------------------------------------------
+char* Socket::strerrorloop(int errnum)
+{
+    if (errnum == 0)
+        return const_cast<char*>("Connection lost");
+    return ::strerror(errnum);
 }
 //------------------------------------------------------------------------------

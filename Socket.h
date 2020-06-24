@@ -38,6 +38,7 @@ protected:
     static int acceptloop(int socket, struct sockaddr* addr, socklen_t* addrlen);
     static ssize_t recvloop(int socket, void* buf, size_t len, int flags);
     static ssize_t sendloop(int socket, const void* buf, size_t len, int flags, char corkbuf[Socket::CORK_SIZE]);
+    static char* strerrorloop(int errnum);
 };
 
 #define errno errno()
