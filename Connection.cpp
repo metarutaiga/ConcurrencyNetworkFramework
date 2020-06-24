@@ -74,16 +74,7 @@ Connection::~Connection()
 {
     Base::Terminate();
 
-    if (thiz.socketTCP > 0)
-    {
-        Socket::shutdown(thiz.socketTCP, SHUT_RD);
-    }
-    if (thiz.socketUDP > 0)
-    {
-        Socket::shutdown(thiz.socketUDP, SHUT_RD);
-    }
-    thiz.sendBufferSemaphoreTCP.release();
-    thiz.sendBufferSemaphoreUDP.release();
+    Shutdown();
     if (thiz.threadRecvTCP.joinable())
     {
         thiz.threadRecvTCP.join();
@@ -132,6 +123,20 @@ Connection::~Connection()
     }
 }
 //------------------------------------------------------------------------------
+void Connection::Shutdown()
+{
+    if (thiz.socketTCP > 0)
+    {
+        Socket::shutdown(thiz.socketTCP, SHUT_RD);
+    }
+    if (thiz.socketUDP > 0)
+    {
+        Socket::shutdown(thiz.socketUDP, SHUT_RD);
+    }
+    thiz.sendBufferSemaphoreTCP.release();
+    thiz.sendBufferSemaphoreUDP.release();
+}
+//------------------------------------------------------------------------------
 void Connection::ProcedureRecvTCP()
 {
     Connection::activeThreadCount[0].fetch_add(1, std::memory_order_acq_rel);
@@ -169,6 +174,7 @@ void Connection::ProcedureRecvTCP()
         Recv(recvBuffer, MODE_TCP);
     }
     Base::Terminate();
+    Shutdown();
 
     thiz.readyTCP = false;
 

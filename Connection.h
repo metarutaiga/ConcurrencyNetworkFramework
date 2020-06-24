@@ -37,6 +37,7 @@ protected:
     static std::atomic_int activeThreadCount[4];
 
 protected:
+    virtual void Shutdown();
     virtual void ProcedureRecvTCP();
     virtual void ProcedureSendTCP();
     virtual void ProcedureRecvUDP();
