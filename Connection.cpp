@@ -125,6 +125,8 @@ Connection::~Connection()
 //------------------------------------------------------------------------------
 void Connection::Shutdown()
 {
+    Base::Terminate();
+
     if (thiz.socketTCP > 0)
     {
         Socket::shutdown(thiz.socketTCP, SHUT_RD);
@@ -238,6 +240,7 @@ void Connection::ProcedureSendTCP()
         sendBufferTCPLocal.clear();
     }
     Base::Terminate();
+    Shutdown();
 
     thiz.readyTCP = false;
 
