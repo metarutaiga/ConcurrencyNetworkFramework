@@ -72,9 +72,7 @@ Connection::Connection(const char* address, const char* port)
 //------------------------------------------------------------------------------
 Connection::~Connection()
 {
-    Base::Terminate();
-
-    Shutdown();
+    Terminate();
     if (thiz.threadRecvTCP.joinable())
     {
         thiz.threadRecvTCP.join();
@@ -123,7 +121,7 @@ Connection::~Connection()
     }
 }
 //------------------------------------------------------------------------------
-void Connection::Shutdown()
+void Connection::Terminate()
 {
     Base::Terminate();
 
@@ -175,8 +173,7 @@ void Connection::ProcedureRecvTCP()
         ProcessRecvTCP(buffer, buffer);
         Recv(recvBuffer, MODE_TCP);
     }
-    Base::Terminate();
-    Shutdown();
+    Terminate();
 
     thiz.readyTCP = false;
 
@@ -239,8 +236,7 @@ void Connection::ProcedureSendTCP()
         }
         sendBufferTCPLocal.clear();
     }
-    Base::Terminate();
-    Shutdown();
+    Terminate();
 
     thiz.readyTCP = false;
 
@@ -324,6 +320,8 @@ void Connection::ProcedureSendUDP()
 //------------------------------------------------------------------------------
 bool Connection::ConnectTCP()
 {
+    if (thiz.Terminating())
+        return false;
     if (thiz.socketTCP <= 0)
         return false;
     if (thiz.threadRecvTCP.joinable() || thiz.threadSendTCP.joinable())
@@ -353,6 +351,8 @@ bool Connection::ConnectTCP()
 //------------------------------------------------------------------------------
 bool Connection::ConnectUDP()
 {
+    if (thiz.Terminating())
+        return false;
     if (thiz.socketTCP <= 0)
         return false;
     if (thiz.sourceAddress == nullptr || thiz.sourcePort == nullptr || thiz.destinationAddress == nullptr || thiz.destinationPort == nullptr)
