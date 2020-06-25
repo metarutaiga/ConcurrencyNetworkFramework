@@ -8,9 +8,9 @@
 
 #include "Base.h"
 
-class Event;
-class Listener;
-class Framework : public Base
+class FRAMEWORK_API Event;
+class FRAMEWORK_API Listener;
+class FRAMEWORK_API Framework : public Base
 {
 protected:
     std::counting_semaphore eventSemaphore;

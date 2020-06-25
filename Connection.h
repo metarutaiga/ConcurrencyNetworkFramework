@@ -9,13 +9,13 @@
 #include "Base.h"
 #include "Buffer.h"
 
-class Connection : public Base
+class FRAMEWORK_API Connection : public Base
 {
 protected:
     bool readyTCP;
     bool readyUDP;
-    int socketTCP;
-    int socketUDP;
+    socket_t socketTCP;
+    socket_t socketUDP;
 
     std::vector<Buffer> sendBufferTCP;
     std::vector<Buffer> sendBufferUDP;
@@ -59,7 +59,7 @@ public:
     enum { UDP_SIZE_MAX = 1280 };
 
 public:
-    Connection(int socket, const char* address, const char* port, const struct sockaddr_storage& addr);
+    Connection(socket_t socket, const char* address, const char* port, const struct sockaddr_storage& addr);
     Connection(const char* address, const char* port);
 
     virtual bool ConnectTCP();

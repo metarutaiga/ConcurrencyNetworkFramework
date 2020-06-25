@@ -4,11 +4,13 @@
 // Copyright (c) 2020 TAiGA
 // https://github.com/metarutaiga/ConcurrencyNetworkFramework
 //==============================================================================
-#include <alloca.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <time.h>
 #include "Log.h"
+#if defined(__APPLE__) || defined(__unix__)
+#   include <alloca.h>
+#endif
 
 //------------------------------------------------------------------------------
 void (*Log::Output)(int level, const char* output) = Log::DefaultOutput;

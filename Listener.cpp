@@ -4,16 +4,18 @@
 // Copyright (c) 2020 TAiGA
 // https://github.com/metarutaiga/ConcurrencyNetworkFramework
 //==============================================================================
-#include <netdb.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#if defined(__linux__)
-#   include <linux/filter.h>
-#endif
 #include "Connection.h"
 #include "Log.h"
 #include "Socket.h"
 #include "Listener.h"
+#if defined(__APPLE__) || defined(__unix__)
+#   include <netdb.h>
+#   include <netinet/in.h>
+#   include <netinet/tcp.h>
+#   if defined(__linux__)
+#      include <linux/filter.h>
+#   endif
+#endif
 
 #define LISTEN_LOG(level, format, ...) \
     Log::Format(Log::level, "%s %d (%s:%s) : " format, "Listen", socket, thiz.address, thiz.port, __VA_ARGS__)
@@ -45,7 +47,7 @@ Listener::~Listener()
     }
 }
 //------------------------------------------------------------------------------
-void Listener::ProcedureListen(int socket)
+void Listener::ProcedureListen(socket_t socket)
 {
     std::vector<Connection*> connectionLocal;
 
@@ -53,7 +55,7 @@ void Listener::ProcedureListen(int socket)
     {
         struct sockaddr_storage sockaddr = {};
         socklen_t sockaddrLength = sizeof(sockaddr);
-        int id = Socket::accept(socket, reinterpret_cast<struct sockaddr*>(&sockaddr), &sockaddrLength);
+        socket_t id = Socket::accept(socket, reinterpret_cast<struct sockaddr*>(&sockaddr), &sockaddrLength);
         if (id <= 0 || Base::Terminating())
         {
             LISTEN_LOG(ERROR, "%s %s", "accept", Socket::strerror(Socket::errno));
@@ -104,7 +106,7 @@ bool Listener::Start(size_t count)
     socklen_t sockaddrLength = Connection::SetAddressPort(sockaddr, thiz.address, thiz.port);
     for (size_t i = 0; i < count; ++i)
     {
-        int socket = Socket::socket(sockaddr.ss_family, SOCK_STREAM, IPPROTO_TCP);
+        socket_t socket = Socket::socket(sockaddr.ss_family, SOCK_STREAM, IPPROTO_TCP);
         if (socket <= 0)
         {
             LISTEN_LOG(ERROR, "%s %s", "socket", Socket::strerror(Socket::errno));
@@ -174,7 +176,7 @@ void Listener::Stop()
 {
     Base::Terminate();
 
-    for (int socket : thiz.socket)
+    for (socket_t socket : thiz.socket)
     {
         if (socket > 0)
         {
@@ -204,7 +206,7 @@ void Listener::Stop()
     }
 }
 //------------------------------------------------------------------------------
-Connection* Listener::CreateConnection(int socket, const struct sockaddr_storage& addr)
+Connection* Listener::CreateConnection(socket_t socket, const struct sockaddr_storage& addr)
 {
     return new Connection(socket, thiz.address, thiz.port, addr);
 }

@@ -4,36 +4,70 @@
 // Copyright (c) 2020 TAiGA
 // https://github.com/metarutaiga/ConcurrencyNetworkFramework
 //==============================================================================
-#include <string.h>
-#include <unistd.h>
 #include "Socket.h"
+#if defined(__APPLE__) || defined(__unix__)
+#   include <unistd.h>
+#   include <string.h>
+#elif defined(_WIN32)
+#   include <WinSock2.h>
+#   pragma comment(lib, "ws2_32")
+    static inline int close(SOCKET socket)
+    {
+        return ::closesocket(socket);
+    }
+#endif
 
 //------------------------------------------------------------------------------
 #undef errno
 //------------------------------------------------------------------------------
-int (*Socket::accept)(int socket, struct sockaddr* addr, socklen_t* addrlen) = acceptloop;
-int (*Socket::bind)(int socket, const struct sockaddr* name, socklen_t namelen) = ::bind;
-int (*Socket::connect)(int socket, const struct sockaddr* name, socklen_t namelen) = ::connect;
-int (*Socket::close)(int socket) = ::close;
-int& (*Socket::errno)() = ::errno;
-int (*Socket::getpeername)(int socket, struct sockaddr* name, socklen_t* namelen) = ::getpeername;
-int (*Socket::getsockname)(int socket, struct sockaddr* name, socklen_t* namelen) = ::getsockname;
-int (*Socket::getsockopt)(int socket, int level, int optname, void* optval, socklen_t* optlen) = ::getsockopt;
-int (*Socket::listen)(int socket, int backlog) = ::listen;
-ssize_t (*Socket::recv)(int socket, void* buf, size_t len, int flags) = Socket::recvloop;
-ssize_t (*Socket::recvfrom)(int socket, void* buf, size_t len, int flags, struct sockaddr* addr, socklen_t* addrlen) = ::recvfrom;
-int (*Socket::setsockopt)(int socket, int level, int optname, const void* optval, socklen_t optlen) = ::setsockopt;
-ssize_t (*Socket::send)(int socket, const void* buf, size_t len, int flags, char so_temp[Socket::CORK_SIZE]) = Socket::sendloop;
-ssize_t (*Socket::sendto)(int socket, const void* buf, size_t len, int flags, const struct sockaddr* name, socklen_t namelen) = ::sendto;
-int (*Socket::shutdown)(int socket, int flags) = ::shutdown;
-int (*Socket::socket)(int af, int type, int protocol) = ::socket;
-char* (*Socket::strerror)(int errnum) = Socket::strerrorloop;
+socket_t (*Socket::accept)(socket_t socket, struct sockaddr* addr, socklen_t* addrlen);
+int (*Socket::bind)(socket_t socket, const struct sockaddr* name, socklen_t namelen);
+int (*Socket::connect)(socket_t socket, const struct sockaddr* name, socklen_t namelen);
+int (*Socket::close)(socket_t socket);
+int& (*Socket::errno)();
+int (*Socket::getpeername)(socket_t socket, struct sockaddr* name, socklen_t* namelen);
+int (*Socket::getsockname)(socket_t socket, struct sockaddr* name, socklen_t* namelen);
+int (*Socket::getsockopt)(socket_t socket, int level, int optname, void* optval, socklen_t* optlen);
+int (*Socket::listen)(socket_t socket, int backlog);
+ssize_t (*Socket::recv)(socket_t socket, void* buf, size_t len, int flags);
+ssize_t (*Socket::recvfrom)(socket_t socket, void* buf, size_t len, int flags, struct sockaddr* addr, socklen_t* addrlen);
+int (*Socket::setsockopt)(socket_t socket, int level, int optname, const void* optval, socklen_t optlen);
+ssize_t (*Socket::send)(socket_t socket, const void* buf, size_t len, int flags, char so_temp[Socket::CORK_SIZE]);
+ssize_t (*Socket::sendto)(socket_t socket, const void* buf, size_t len, int flags, const struct sockaddr* name, socklen_t namelen);
+int (*Socket::shutdown)(socket_t socket, int flags);
+socket_t (*Socket::socket)(int af, int type, int protocol);
+char* (*Socket::strerror)(int errnum);
+//------------------------------------------------------------------------------
+void Socket::startup()
+{
+#if defined(_WIN32)
+    WSADATA wsaData;
+    WSAStartup(MAKEWORD(1, 1), &wsaData);
+#endif
+    (void*&)Socket::accept = Socket::acceptloop;
+    (void*&)Socket::bind = ::bind;
+    (void*&)Socket::connect = ::connect;
+    (void*&)Socket::close = ::close;
+    (void*&)Socket::errno = Socket::errnoloop;
+    (void*&)Socket::getpeername = ::getpeername;
+    (void*&)Socket::getsockname = ::getsockname;
+    (void*&)Socket::getsockopt = ::getsockopt;
+    (void*&)Socket::listen = ::listen;
+    (void*&)Socket::recv = Socket::recvloop;
+    (void*&)Socket::recvfrom = ::recvfrom;
+    (void*&)Socket::setsockopt = ::setsockopt;
+    (void*&)Socket::send = Socket::sendloop;
+    (void*&)Socket::sendto = ::sendto;
+    (void*&)Socket::shutdown = ::shutdown;
+    (void*&)Socket::socket = ::socket;
+    (void*&)Socket::strerror = Socket::strerrorloop;
+}
 //------------------------------------------------------------------------------
 #define errno errno()
 //------------------------------------------------------------------------------
-int Socket::acceptloop(int socket, struct sockaddr* addr, socklen_t* addrlen)
+socket_t Socket::acceptloop(socket_t socket, struct sockaddr* addr, socklen_t* addrlen)
 {
-    int result = 0;
+    socket_t result = 0;
     for (;;)
     {
         result = ::accept(socket, addr, addrlen);
@@ -49,12 +83,12 @@ int Socket::acceptloop(int socket, struct sockaddr* addr, socklen_t* addrlen)
     return result;
 }
 //------------------------------------------------------------------------------
-ssize_t Socket::recvloop(int socket, void* buf, size_t len, int flags)
+ssize_t Socket::recvloop(socket_t socket, void* buf, size_t len, int flags)
 {
     ssize_t result = 0;
     for (;;)
     {
-        result = ::recv(socket, buf, len, flags);
+        result = ::recv(socket, (char*)buf, (socklen_t)len, flags);
         if (result >= 0)
             break;
         if (Socket::errno == EAGAIN || Socket::errno == EWOULDBLOCK || Socket::errno == EINTR)
@@ -67,12 +101,12 @@ ssize_t Socket::recvloop(int socket, void* buf, size_t len, int flags)
     return result;
 }
 //------------------------------------------------------------------------------
-ssize_t Socket::sendloop(int socket, const void* buf, size_t len, int flags, char corkbuf[Socket::CORK_SIZE])
+ssize_t Socket::sendloop(socket_t socket, const void* buf, size_t len, int flags, char corkbuf[Socket::CORK_SIZE])
 {
     struct CORK
     {
-        unsigned int length;
-        char buffer[Socket::CORK_SIZE - sizeof(int)];
+        size_t length;
+        char buffer[Socket::CORK_SIZE - sizeof(size_t)];
     };
     CORK& cork = reinterpret_cast<CORK&>(*corkbuf);
 
@@ -80,7 +114,7 @@ ssize_t Socket::sendloop(int socket, const void* buf, size_t len, int flags, cha
     {
         if (len + cork.length > sizeof(cork.buffer))
         {
-            unsigned int length = cork.length;
+            size_t length = cork.length;
             cork.length = 0;
             ssize_t result = sendloop(socket, cork.buffer, length, flags & ~MSG_MORE, corkbuf);
             if (result < 0)
@@ -91,7 +125,7 @@ ssize_t Socket::sendloop(int socket, const void* buf, size_t len, int flags, cha
             ::memcpy(&cork.buffer[cork.length], buf, len);
             cork.length += len;
             if (flags & MSG_MORE)
-                return len;
+                return (ssize_t)len;
             buf = cork.buffer;
             len = cork.length;
             flags &= ~MSG_MORE;
@@ -102,7 +136,7 @@ ssize_t Socket::sendloop(int socket, const void* buf, size_t len, int flags, cha
     ssize_t result = 0;
     for (;;)
     {
-        result = ::send(socket, buf, len, flags);
+        result = ::send(socket, (char*)buf, (socklen_t)len, flags);
         if (result >= 0)
             break;
         if (Socket::errno == EAGAIN || Socket::errno == EWOULDBLOCK || Socket::errno == EINTR)
@@ -115,10 +149,31 @@ ssize_t Socket::sendloop(int socket, const void* buf, size_t len, int flags, cha
     return result;
 }
 //------------------------------------------------------------------------------
+int& Socket::errnoloop()
+{
+#if defined(__APPLE__) || defined(__unix__)
+    return ::errno;
+#elif defined(_WIN32)
+    thread_local static int error;
+    error = WSAGetLastError();
+    return error;
+#endif
+}
+//------------------------------------------------------------------------------
 char* Socket::strerrorloop(int errnum)
 {
+#if defined(__APPLE__) || defined(__unix__)
     if (errnum == 0)
         return const_cast<char*>("Connection lost");
     return ::strerror(errnum);
+#elif defined(_WIN32)
+    thread_local static std::string message;
+    message.resize(256);
+    FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, errnum, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), &message.front(), 256, nullptr);
+    size_t crlf = message.find("\r");
+    if (crlf != std::string::npos)
+        message.resize(crlf);
+    return &message.front();
+#endif
 }
 //------------------------------------------------------------------------------

@@ -4,22 +4,24 @@
 // Copyright (c) 2020 TAiGA
 // https://github.com/metarutaiga/ConcurrencyNetworkFramework
 //==============================================================================
-#include <arpa/inet.h>
-#include <netinet/tcp.h>
-#if defined(__linux__)
-#   include <linux/filter.h>
-#endif
 #include "Listener.h"
 #include "Log.h"
 #include "Socket.h"
 #include "Connection.h"
+#if defined(__APPLE__) || defined(__unix__)
+#   include <arpa/inet.h>
+#   include <netinet/tcp.h>
+#   if defined(__linux__)
+#       include <linux/filter.h>
+#   endif
+#endif
 
 #define CONNECT_LOG(proto, level, format, ...) \
     Log::Format(Log::level, "%s %d (%s:%s:%s@%s:%s) : " format, "Connect", thiz.socket ## proto, #proto, thiz.sourceAddress, thiz.sourcePort, thiz.destinationAddress, thiz.destinationPort, __VA_ARGS__)
 
 std::atomic_int Connection::activeThreadCount[4];
 //------------------------------------------------------------------------------
-Connection::Connection(int socket, const char* address, const char* port, const struct sockaddr_storage& addr)
+Connection::Connection(socket_t socket, const char* address, const char* port, const struct sockaddr_storage& addr)
 {
     thiz.socketTCP = socket;
     thiz.socketUDP = 0;
@@ -73,6 +75,16 @@ Connection::Connection(const char* address, const char* port)
 Connection::~Connection()
 {
     Terminate();
+    if (thiz.socketTCP > 0)
+    {
+        Socket::close(thiz.socketTCP);
+        thiz.socketTCP = 0;
+    }
+    if (thiz.socketUDP > 0)
+    {
+        Socket::close(thiz.socketUDP);
+        thiz.socketUDP = 0;
+    }
     if (thiz.threadRecvTCP.joinable())
     {
         thiz.threadRecvTCP.join();
@@ -88,16 +100,6 @@ Connection::~Connection()
     if (thiz.threadSendUDP.joinable())
     {
         thiz.threadSendUDP.join();
-    }
-    if (thiz.socketTCP > 0)
-    {
-        Socket::close(thiz.socketTCP);
-        thiz.socketTCP = 0;
-    }
-    if (thiz.socketUDP > 0)
-    {
-        Socket::close(thiz.socketUDP);
-        thiz.socketUDP = 0;
     }
     if (thiz.sourceAddress)
     {
@@ -207,7 +209,7 @@ void Connection::ProcedureSendTCP()
             {
                 // Length
                 unsigned short size = (short)buffer.size();
-                if (Socket::send(thiz.socketTCP, &size, sizeof(short), MSG_WAITALL | MSG_NOSIGNAL | MSG_MORE, cork) <= 0)
+                if (Socket::send(thiz.socketTCP, &size, sizeof(short), MSG_NOSIGNAL | MSG_MORE, cork) <= 0)
                 {
                     disconnect = true;
                     CONNECT_LOG(TCP, ERROR, "%s %s", "send", Socket::strerror(Socket::errno));
@@ -222,7 +224,7 @@ void Connection::ProcedureSendTCP()
                 }
 
                 // Data
-                if (Socket::send(thiz.socketTCP, &buffer.front(), size, MSG_WAITALL | MSG_NOSIGNAL, cork) <= 0)
+                if (Socket::send(thiz.socketTCP, &buffer.front(), size, MSG_NOSIGNAL, cork) <= 0)
                 {
                     disconnect = true;
                     CONNECT_LOG(TCP, ERROR, "%s %s", "send", Socket::strerror(Socket::errno));
@@ -255,7 +257,7 @@ void Connection::ProcedureRecvUDP()
         buffer.resize(UDP_SIZE_MAX);
 
         // Data
-        long size = Socket::recv(thiz.socketUDP, &buffer.front(), buffer.size(), MSG_WAITALL | MSG_NOSIGNAL);
+        long size = Socket::recv(thiz.socketUDP, &buffer.front(), buffer.size(), MSG_NOSIGNAL);
         if (size <= 0)
         {
             CONNECT_LOG(UDP, ERROR, "%s %s", "recv", Socket::strerror(Socket::errno));
@@ -298,7 +300,7 @@ void Connection::ProcedureSendUDP()
             if (buffer.size() <= UDP_SIZE_MAX)
             {
                 // Data
-                if (Socket::send(thiz.socketUDP, &buffer.front(), buffer.size(), MSG_WAITALL | MSG_NOSIGNAL, cork) <= 0)
+                if (Socket::send(thiz.socketUDP, &buffer.front(), buffer.size(), MSG_NOSIGNAL, cork) <= 0)
                 {
                     disconnect = true;
                     CONNECT_LOG(UDP, ERROR, "%s %s", "send", Socket::strerror(Socket::errno));

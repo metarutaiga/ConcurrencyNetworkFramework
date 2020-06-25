@@ -6,7 +6,7 @@
 //==============================================================================
 #pragma once
 
-class Event
+class FRAMEWORK_API Event
 {
 public:
     Event() {}

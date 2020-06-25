@@ -8,11 +8,11 @@
 
 #include "Base.h"
 
-class Connection;
-class Listener : public Base
+class FRAMEWORK_API Connection;
+class FRAMEWORK_API Listener : public Base
 {
 protected:
-    std::vector<int> socket;
+    std::vector<socket_t> socket;
     std::vector<std::thread> threadListen;
 
     std::vector<Connection*> connectionArray;
@@ -23,7 +23,7 @@ protected:
     int backlog;
 
 protected:
-    virtual void ProcedureListen(int socket);
+    virtual void ProcedureListen(socket_t socket);
 
 public:
     Listener(const char* address, const char* port, int backlog = 128);
@@ -32,5 +32,5 @@ public:
     virtual bool Start(size_t count);
     virtual void Stop();
 
-    virtual Connection* CreateConnection(int socket, const struct sockaddr_storage& addr);
+    virtual Connection* CreateConnection(socket_t socket, const struct sockaddr_storage& addr);
 };

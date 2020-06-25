@@ -6,7 +6,9 @@
 //==============================================================================
 #pragma once
 
-class Log
+#include "FrameworkHeader.h"
+
+class FRAMEWORK_API Log
 {
 public:
     enum Level

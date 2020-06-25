@@ -8,7 +8,7 @@
 
 #include "FrameworkHeader.h"
 
-class Buffer : public std::shared_ptr<std::vector<char>>
+class FRAMEWORK_API Buffer : public std::shared_ptr<std::vector<char>>
 {
 protected:
     static void Recycle(element_type* pointer);

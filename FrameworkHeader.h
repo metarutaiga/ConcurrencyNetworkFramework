@@ -10,7 +10,20 @@
 #   include "config.h"
 #endif
 
-#include <sys/errno.h>
+#if defined(__APPLE__) || defined(__unix__)
+#   define FRAMEWORK_API
+#   include <sys/errno.h>
+#elif defined(_WIN32)
+#   pragma warning(disable:4251)
+#   if defined(_BUILD)
+#       define FRAMEWORK_API __declspec(dllexport)
+#   else
+#       define FRAMEWORK_API __declspec(dllimport)
+#endif
+#   define _CRT_NONSTDC_NO_WARNINGS
+#   define _CRT_SECURE_NO_WARNINGS
+#   include <errno.h>
+#endif
 #undef errno
 static inline int& errno()
 {
@@ -20,20 +33,39 @@ static inline int& errno()
     return (*__error());
 #elif defined(__linux__)
     return (*__errno_location());
+#elif defined(_WIN32)
+    return (*_errno());
 #else
     return ::errno;
 #endif
 }
+#include <stddef.h>
+#include <stdlib.h>
+#undef errno
 #define errno errno()
 
-#include <sys/socket.h>
+#if defined(__APPLE__) || defined(__unix__)
+#   include <sys/socket.h>
+#elif defined(_WIN32)
+#   include <WinSock2.h>
+#   include <WS2tcpip.h>
+#   undef ERROR
+#   define __attribute__(unused)
+#   define SHUT_RD SD_RECEIVE
+#   define SO_REUSEPORT SO_REUSEADDR
+#   define localtime_r(a,b) localtime_s(b,a)
+    typedef int socklen_t;
+    typedef int ssize_t;
+    typedef SOCKET socket_t;
+#endif
 
+#include "HackingSTL/semaphore"
+#include "HackingSTL/thread"
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <vector>
-#include "HackingSTL/semaphore"
-#include "HackingSTL/thread"
 
 #ifndef MSG_NOSIGNAL
 #   define MSG_NOSIGNAL 0

@@ -9,6 +9,7 @@
 #include "Event.h"
 #include "Listener.h"
 #include "Log.h"
+#include "Socket.h"
 #include "Framework.h"
 
 #define FRAMEWORK_LOG(level, format, ...) \
@@ -17,7 +18,7 @@
 //------------------------------------------------------------------------------
 Framework::Framework()
 {
-
+    Socket::startup();
 }
 //------------------------------------------------------------------------------
 Framework::~Framework()

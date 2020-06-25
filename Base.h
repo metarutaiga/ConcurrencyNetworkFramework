@@ -8,7 +8,7 @@
 
 #include "FrameworkHeader.h"
 
-class Base
+class FRAMEWORK_API Base
 {
     volatile bool terminate;
 

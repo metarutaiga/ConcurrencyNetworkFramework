@@ -10,34 +10,38 @@
 
 #undef errno
 
-class Socket
+class FRAMEWORK_API Socket
 {
 public:
     enum { CORK_SIZE = 1280 };
 
 public:
-    static int (*accept)(int socket, struct sockaddr* addr, socklen_t* addrlen);
-    static int (*bind)(int socket, const struct sockaddr* name, socklen_t namelen);
-    static int (*connect)(int socket, const struct sockaddr* name, socklen_t namelen);
-    static int (*close)(int socket);
+    static socket_t (*accept)(socket_t socket, struct sockaddr* addr, socklen_t* addrlen);
+    static int (*bind)(socket_t socket, const struct sockaddr* name, socklen_t namelen);
+    static int (*connect)(socket_t socket, const struct sockaddr* name, socklen_t namelen);
+    static int (*close)(socket_t socket);
     static int& (*errno)();
-    static int (*getpeername)(int socket, struct sockaddr* name, socklen_t* namelen);
-    static int (*getsockname)(int socket, struct sockaddr* name, socklen_t* namelen);
-    static int (*getsockopt)(int socket, int level, int optname, void* optval, socklen_t* optlen);
-    static int (*listen)(int socket, int backlog);
-    static ssize_t (*recv)(int socket, void* buf, size_t len, int flags);
-    static ssize_t (*recvfrom)(int socket, void* buf, size_t len, int flags, struct sockaddr* addr, socklen_t* addrlen);
-    static int (*setsockopt)(int socket, int level, int optname, const void* optval, socklen_t optlen);
-    static ssize_t (*send)(int socket, const void* buf, size_t len, int flags, char corkbuf[CORK_SIZE]);
-    static ssize_t (*sendto)(int socket, const void* buf, size_t len, int flags, const struct sockaddr* name, socklen_t namelen);
-    static int (*shutdown)(int socket, int flags);
-    static int (*socket)(int af, int type, int protocol);
+    static int (*getpeername)(socket_t socket, struct sockaddr* name, socklen_t* namelen);
+    static int (*getsockname)(socket_t socket, struct sockaddr* name, socklen_t* namelen);
+    static int (*getsockopt)(socket_t socket, int level, int optname, void* optval, socklen_t* optlen);
+    static int (*listen)(socket_t socket, int backlog);
+    static ssize_t (*recv)(socket_t socket, void* buf, size_t len, int flags);
+    static ssize_t (*recvfrom)(socket_t socket, void* buf, size_t len, int flags, struct sockaddr* addr, socklen_t* addrlen);
+    static int (*setsockopt)(socket_t socket, int level, int optname, const void* optval, socklen_t optlen);
+    static ssize_t (*send)(socket_t socket, const void* buf, size_t len, int flags, char corkbuf[CORK_SIZE]);
+    static ssize_t (*sendto)(socket_t socket, const void* buf, size_t len, int flags, const struct sockaddr* name, socklen_t namelen);
+    static int (*shutdown)(socket_t socket, int flags);
+    static socket_t (*socket)(int af, int type, int protocol);
     static char* (*strerror)(int errnum);
 
+public:
+    static void startup();
+
 protected:
-    static int acceptloop(int socket, struct sockaddr* addr, socklen_t* addrlen);
-    static ssize_t recvloop(int socket, void* buf, size_t len, int flags);
-    static ssize_t sendloop(int socket, const void* buf, size_t len, int flags, char corkbuf[Socket::CORK_SIZE]);
+    static socket_t acceptloop(socket_t socket, struct sockaddr* addr, socklen_t* addrlen);
+    static int& errnoloop();
+    static ssize_t recvloop(socket_t socket, void* buf, size_t len, int flags);
+    static ssize_t sendloop(socket_t socket, const void* buf, size_t len, int flags, char corkbuf[Socket::CORK_SIZE]);
     static char* strerrorloop(int errnum);
 };
 
