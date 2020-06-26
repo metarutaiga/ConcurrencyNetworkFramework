@@ -19,9 +19,12 @@
 #       define FRAMEWORK_API __declspec(dllexport)
 #   else
 #       define FRAMEWORK_API __declspec(dllimport)
-#endif
+#   endif
 #   define _CRT_NONSTDC_NO_WARNINGS
 #   define _CRT_SECURE_NO_WARNINGS
+#   define NOMINMAX
+#   define VC_EXTRALEAN
+#   define WIN32_LEAN_AND_MEAN
 #   include <errno.h>
 #endif
 #undef errno
