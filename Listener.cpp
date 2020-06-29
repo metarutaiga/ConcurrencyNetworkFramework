@@ -23,12 +23,9 @@
 //------------------------------------------------------------------------------
 Listener::Listener(const char* address, const char* port, int backlog)
 {
-    thiz.address = address ? ::strdup(address) : nullptr;
+    thiz.address = address ? ::strdup(address) : ::strdup("0.0.0.0");
     thiz.port = port ? ::strdup(port) : ::strdup("7777");
     thiz.backlog = backlog;
-#if defined(__APPLE__)
-    signal(SIGPIPE, SIG_IGN);
-#endif
 }
 //------------------------------------------------------------------------------
 Listener::~Listener()

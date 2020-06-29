@@ -40,7 +40,9 @@ char* (*Socket::strerror)(int errnum);
 //------------------------------------------------------------------------------
 void Socket::startup()
 {
-#if defined(_WIN32)
+#if defined(__APPLE__)
+    signal(SIGPIPE, SIG_IGN);
+#elif defined(_WIN32)
     WSADATA wsaData;
     WSAStartup(MAKEWORD(1, 1), &wsaData);
 #endif
