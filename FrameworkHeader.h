@@ -27,6 +27,8 @@
 #   define WIN32_LEAN_AND_MEAN
 #   include <errno.h>
 #endif
+#include <stddef.h>
+#include <stdlib.h>
 #undef errno
 static inline int& errno()
 {
@@ -42,8 +44,6 @@ static inline int& errno()
     return ::errno;
 #endif
 }
-#include <stddef.h>
-#include <stdlib.h>
 #undef errno
 #define errno errno()
 
