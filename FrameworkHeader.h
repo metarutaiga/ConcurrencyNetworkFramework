@@ -49,6 +49,7 @@ static inline int& errno()
 
 #if defined(__APPLE__) || defined(__unix__)
 #   include <sys/socket.h>
+    typedef int socket_t;
 #elif defined(_WIN32)
 #   include <WinSock2.h>
 #   include <WS2tcpip.h>

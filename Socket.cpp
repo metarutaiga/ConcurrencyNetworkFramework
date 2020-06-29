@@ -44,23 +44,23 @@ void Socket::startup()
     WSADATA wsaData;
     WSAStartup(MAKEWORD(1, 1), &wsaData);
 #endif
-    (void*&)Socket::accept = Socket::acceptloop;
-    (void*&)Socket::bind = ::bind;
-    (void*&)Socket::connect = ::connect;
-    (void*&)Socket::close = ::close;
-    (void*&)Socket::errno = Socket::errnoloop;
-    (void*&)Socket::getpeername = ::getpeername;
-    (void*&)Socket::getsockname = ::getsockname;
-    (void*&)Socket::getsockopt = ::getsockopt;
-    (void*&)Socket::listen = ::listen;
-    (void*&)Socket::recv = Socket::recvloop;
-    (void*&)Socket::recvfrom = ::recvfrom;
-    (void*&)Socket::setsockopt = ::setsockopt;
-    (void*&)Socket::send = Socket::sendloop;
-    (void*&)Socket::sendto = ::sendto;
-    (void*&)Socket::shutdown = ::shutdown;
-    (void*&)Socket::socket = ::socket;
-    (void*&)Socket::strerror = Socket::strerrorloop;
+    (void*&)Socket::accept = (void*)Socket::acceptloop;
+    (void*&)Socket::bind = (void*)::bind;
+    (void*&)Socket::connect = (void*)::connect;
+    (void*&)Socket::close = (void*)::close;
+    (void*&)Socket::errno = (void*)Socket::errnoloop;
+    (void*&)Socket::getpeername = (void*)::getpeername;
+    (void*&)Socket::getsockname = (void*)::getsockname;
+    (void*&)Socket::getsockopt = (void*)::getsockopt;
+    (void*&)Socket::listen = (void*)::listen;
+    (void*&)Socket::recv = (void*)Socket::recvloop;
+    (void*&)Socket::recvfrom = (void*)::recvfrom;
+    (void*&)Socket::setsockopt = (void*)::setsockopt;
+    (void*&)Socket::send = (void*)Socket::sendloop;
+    (void*&)Socket::sendto = (void*)::sendto;
+    (void*&)Socket::shutdown = (void*)::shutdown;
+    (void*&)Socket::socket = (void*)::socket;
+    (void*&)Socket::strerror = (void*)Socket::strerrorloop;
 }
 //------------------------------------------------------------------------------
 #define errno errno()
