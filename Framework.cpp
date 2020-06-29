@@ -50,7 +50,7 @@ int Framework::Dispatch(size_t listenCount)
     std::vector<Event*> eventLocal;
     std::vector<Connection*> connectionLocal;
 
-    FRAMEWORK_LOG(INFO, "%s", "Start");
+    FRAMEWORK_LOG(INFO, "%s", "Starting");
     for (Listener* server : thiz.serverArray)
     {
         server->Start(listenCount);
@@ -74,10 +74,11 @@ int Framework::Dispatch(size_t listenCount)
                           Buffer::Unused());
             continue;
         }
+
+        // Process events
         thiz.eventMutex.lock();
         thiz.eventArray.swap(eventLocal);
         thiz.eventMutex.unlock();
-
         for (Event* event : eventLocal)
         {
             event->Execute();
@@ -85,14 +86,15 @@ int Framework::Dispatch(size_t listenCount)
         }
         eventLocal.clear();
     }
-    FRAMEWORK_LOG(INFO, "%s", "Shutdown");
 
+    FRAMEWORK_LOG(INFO, "%s", "Shutdown");
     for (Listener* server : thiz.serverArray)
     {
         server->Stop();
     }
     thiz.serverArray.clear();
 
+    // Delete events
     thiz.eventMutex.lock();
     thiz.eventArray.swap(eventLocal);
     thiz.eventMutex.unlock();
@@ -102,7 +104,7 @@ int Framework::Dispatch(size_t listenCount)
     }
     eventLocal.clear();
 
-    FRAMEWORK_LOG(INFO, "%s", "Terminate");
+    FRAMEWORK_LOG(INFO, "%s", "Stopped");
     return 0;
 }
 //------------------------------------------------------------------------------
