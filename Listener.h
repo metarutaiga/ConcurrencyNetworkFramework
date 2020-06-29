@@ -31,6 +31,7 @@ public:
 
     virtual bool Start(size_t count);
     virtual void Stop();
+    virtual void CheckAlive(std::vector<Connection*>& connectionTemp);
 
     virtual Connection* CreateConnection(socket_t socket, const struct sockaddr_storage& addr);
 };

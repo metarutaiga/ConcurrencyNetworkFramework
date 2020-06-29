@@ -48,6 +48,7 @@ void Framework::Server(Listener* server)
 int Framework::Dispatch(size_t listenCount)
 {
     std::vector<Event*> eventLocal;
+    std::vector<Connection*> connectionLocal;
 
     FRAMEWORK_LOG(INFO, "%s", "Start");
     for (Listener* server : thiz.serverArray)
@@ -60,6 +61,10 @@ int Framework::Dispatch(size_t listenCount)
     {
         if (thiz.eventSemaphore.try_acquire_for(std::chrono::seconds(60)) == false)
         {
+            for (Listener* server : thiz.serverArray)
+            {
+                server->CheckAlive(connectionLocal);
+            }
             FRAMEWORK_LOG(INFO, "Idle (%d/%d/%d/%d/%d/%d)",
                           Connection::GetActiveThreadCount(0),
                           Connection::GetActiveThreadCount(1),

@@ -77,22 +77,11 @@ void Listener::ProcedureListen(socket_t socket)
             continue;
         }
 
-        connectionLocal.clear();
         thiz.connectionMutex.lock();
-        for (Connection* connection : thiz.connectionArray)
-        {
-            if (connection == nullptr)
-                continue;
-            if (connection->Alive() == false)
-            {
-                connection->Disconnect();
-                continue;
-            }
-            connectionLocal.emplace_back(connection);
-        }
-        thiz.connectionArray.swap(connectionLocal);
         thiz.connectionArray.emplace_back(connection);
         thiz.connectionMutex.unlock();
+
+        CheckAlive(connectionLocal);
     }
     Base::Terminate();
 }
@@ -201,6 +190,26 @@ void Listener::Stop()
             continue;
         connection->Disconnect();
     }
+}
+//------------------------------------------------------------------------------
+void Listener::CheckAlive(std::vector<Connection*>& connectionTemp)
+{
+    connectionTemp.clear();
+
+    thiz.connectionMutex.lock();
+    for (Connection* connection : thiz.connectionArray)
+    {
+        if (connection == nullptr)
+            continue;
+        if (connection->Alive() == false)
+        {
+            connection->Disconnect();
+            continue;
+        }
+        connectionTemp.emplace_back(connection);
+    }
+    thiz.connectionArray.swap(connectionTemp);
+    thiz.connectionMutex.unlock();
 }
 //------------------------------------------------------------------------------
 Connection* Listener::CreateConnection(socket_t socket, const struct sockaddr_storage& addr)
