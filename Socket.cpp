@@ -11,7 +11,7 @@
 #elif defined(_WIN32)
 #   include <WinSock2.h>
 #   pragma comment(lib, "ws2_32")
-    static inline int close(SOCKET socket)
+    static inline int SOCKET_API close(SOCKET socket)
     {
         return ::closesocket(socket);
     }
@@ -20,23 +20,23 @@
 //------------------------------------------------------------------------------
 #undef errno
 //------------------------------------------------------------------------------
-socket_t (*Socket::accept)(socket_t socket, struct sockaddr* addr, socklen_t* addrlen);
-int (*Socket::bind)(socket_t socket, const struct sockaddr* name, socklen_t namelen);
-int (*Socket::connect)(socket_t socket, const struct sockaddr* name, socklen_t namelen);
-int (*Socket::close)(socket_t socket);
-int& (*Socket::errno)();
-int (*Socket::getpeername)(socket_t socket, struct sockaddr* name, socklen_t* namelen);
-int (*Socket::getsockname)(socket_t socket, struct sockaddr* name, socklen_t* namelen);
-int (*Socket::getsockopt)(socket_t socket, int level, int optname, void* optval, socklen_t* optlen);
-int (*Socket::listen)(socket_t socket, int backlog);
-ssize_t (*Socket::recv)(socket_t socket, void* buf, size_t len, int flags);
-ssize_t (*Socket::recvfrom)(socket_t socket, void* buf, size_t len, int flags, struct sockaddr* addr, socklen_t* addrlen);
-int (*Socket::setsockopt)(socket_t socket, int level, int optname, const void* optval, socklen_t optlen);
-ssize_t (*Socket::send)(socket_t socket, const void* buf, size_t len, int flags, char so_temp[Socket::CORK_SIZE]);
-ssize_t (*Socket::sendto)(socket_t socket, const void* buf, size_t len, int flags, const struct sockaddr* name, socklen_t namelen);
-int (*Socket::shutdown)(socket_t socket, int flags);
-socket_t (*Socket::socket)(int af, int type, int protocol);
-char* (*Socket::strerror)(int errnum);
+socket_t (SOCKET_API *Socket::accept)(socket_t socket, struct sockaddr* addr, socklen_t* addrlen);
+int (SOCKET_API *Socket::bind)(socket_t socket, const struct sockaddr* name, socklen_t namelen);
+int (SOCKET_API *Socket::connect)(socket_t socket, const struct sockaddr* name, socklen_t namelen);
+int (SOCKET_API *Socket::close)(socket_t socket);
+int& (SOCKET_API *Socket::errno)();
+int (SOCKET_API *Socket::getpeername)(socket_t socket, struct sockaddr* name, socklen_t* namelen);
+int (SOCKET_API *Socket::getsockname)(socket_t socket, struct sockaddr* name, socklen_t* namelen);
+int (SOCKET_API *Socket::getsockopt)(socket_t socket, int level, int optname, void* optval, socklen_t* optlen);
+int (SOCKET_API *Socket::listen)(socket_t socket, int backlog);
+ssize_t (SOCKET_API *Socket::recv)(socket_t socket, void* buf, size_t len, int flags);
+ssize_t (SOCKET_API *Socket::recvfrom)(socket_t socket, void* buf, size_t len, int flags, struct sockaddr* addr, socklen_t* addrlen);
+int (SOCKET_API *Socket::setsockopt)(socket_t socket, int level, int optname, const void* optval, socklen_t optlen);
+ssize_t (SOCKET_API *Socket::send)(socket_t socket, const void* buf, size_t len, int flags, char so_temp[Socket::CORK_SIZE]);
+ssize_t (SOCKET_API *Socket::sendto)(socket_t socket, const void* buf, size_t len, int flags, const struct sockaddr* name, socklen_t namelen);
+int (SOCKET_API *Socket::shutdown)(socket_t socket, int flags);
+socket_t (SOCKET_API *Socket::socket)(int af, int type, int protocol);
+char* (SOCKET_API *Socket::strerror)(int errnum);
 //------------------------------------------------------------------------------
 void Socket::startup()
 {
@@ -171,7 +171,7 @@ char* Socket::strerrorloop(int errnum)
 #elif defined(_WIN32)
     thread_local static std::string message;
     message.resize(256);
-    FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, errnum, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), &message.front(), 256, nullptr);
+    FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, errnum, MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US), &message.front(), 256, nullptr);
     size_t crlf = message.find("\r");
     if (crlf != std::string::npos)
         message.resize(crlf);

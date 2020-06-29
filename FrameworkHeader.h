@@ -49,6 +49,7 @@ static inline int& errno()
 
 #if defined(__APPLE__) || defined(__unix__)
 #   include <sys/socket.h>
+#   define SOCKET_API
     typedef int socket_t;
 #elif defined(_WIN32)
 #   include <WinSock2.h>
@@ -58,6 +59,7 @@ static inline int& errno()
 #   define SHUT_RD SD_RECEIVE
 #   define SO_REUSEPORT SO_REUSEADDR
 #   define localtime_r(a,b) localtime_s(b,a)
+#   define SOCKET_API __stdcall
     typedef int socklen_t;
     typedef int ssize_t;
     typedef SOCKET socket_t;
