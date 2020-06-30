@@ -11,7 +11,7 @@
 #elif defined(_WIN32)
 #   include <WinSock2.h>
 #   pragma comment(lib, "ws2_32")
-    static inline int SOCKET_API close(SOCKET socket)
+    static inline int close(SOCKET socket)
     {
         return ::closesocket(socket);
     }
@@ -20,23 +20,23 @@
 //------------------------------------------------------------------------------
 #undef errno
 //------------------------------------------------------------------------------
-socket_t (SOCKET_API *Socket::accept)(socket_t socket, struct sockaddr* addr, socklen_t* addrlen);
-int (SOCKET_API *Socket::bind)(socket_t socket, const struct sockaddr* name, socklen_t namelen);
-int (SOCKET_API *Socket::connect)(socket_t socket, const struct sockaddr* name, socklen_t namelen);
-int (SOCKET_API *Socket::close)(socket_t socket);
-int& (SOCKET_API *Socket::errno)();
-int (SOCKET_API *Socket::getpeername)(socket_t socket, struct sockaddr* name, socklen_t* namelen);
-int (SOCKET_API *Socket::getsockname)(socket_t socket, struct sockaddr* name, socklen_t* namelen);
-int (SOCKET_API *Socket::getsockopt)(socket_t socket, int level, int optname, void* optval, socklen_t* optlen);
-int (SOCKET_API *Socket::listen)(socket_t socket, int backlog);
-ssize_t (SOCKET_API *Socket::recv)(socket_t socket, void* buf, size_t len, int flags);
-ssize_t (SOCKET_API *Socket::recvfrom)(socket_t socket, void* buf, size_t len, int flags, struct sockaddr* addr, socklen_t* addrlen);
-int (SOCKET_API *Socket::setsockopt)(socket_t socket, int level, int optname, const void* optval, socklen_t optlen);
-ssize_t (SOCKET_API *Socket::send)(socket_t socket, const void* buf, size_t len, int flags, char so_temp[Socket::CORK_SIZE]);
-ssize_t (SOCKET_API *Socket::sendto)(socket_t socket, const void* buf, size_t len, int flags, const struct sockaddr* name, socklen_t namelen);
-int (SOCKET_API *Socket::shutdown)(socket_t socket, int flags);
-socket_t (SOCKET_API *Socket::socket)(int af, int type, int protocol);
-char* (SOCKET_API *Socket::strerror)(int errnum);
+socket_t (*Socket::accept)(socket_t socket, struct sockaddr* addr, socklen_t* addrlen);
+int (*Socket::bind)(socket_t socket, const struct sockaddr* name, socklen_t namelen);
+int (*Socket::connect)(socket_t socket, const struct sockaddr* name, socklen_t namelen);
+int (*Socket::close)(socket_t socket);
+int& (*Socket::errno)();
+int (*Socket::getpeername)(socket_t socket, struct sockaddr* name, socklen_t* namelen);
+int (*Socket::getsockname)(socket_t socket, struct sockaddr* name, socklen_t* namelen);
+int (*Socket::getsockopt)(socket_t socket, int level, int optname, void* optval, socklen_t* optlen);
+int (*Socket::listen)(socket_t socket, int backlog);
+ssize_t (*Socket::recv)(socket_t socket, void* buf, size_t len, int flags);
+ssize_t (*Socket::recvfrom)(socket_t socket, void* buf, size_t len, int flags, struct sockaddr* addr, socklen_t* addrlen);
+int (*Socket::setsockopt)(socket_t socket, int level, int optname, const void* optval, socklen_t optlen);
+ssize_t (*Socket::send)(socket_t socket, const void* buf, size_t len, int flags, char so_temp[Socket::CORK_SIZE]);
+ssize_t (*Socket::sendto)(socket_t socket, const void* buf, size_t len, int flags, const struct sockaddr* name, socklen_t namelen);
+int (*Socket::shutdown)(socket_t socket, int flags);
+socket_t (*Socket::socket)(int af, int type, int protocol);
+char* (*Socket::strerror)(int errnum);
 //------------------------------------------------------------------------------
 void Socket::startup()
 {
@@ -46,28 +46,35 @@ void Socket::startup()
     WSADATA wsaData;
     WSAStartup(MAKEWORD(1, 1), &wsaData);
 #endif
-    (void*&)Socket::accept = (void*)Socket::acceptloop;
-    (void*&)Socket::bind = (void*)::bind;
-    (void*&)Socket::connect = (void*)::connect;
-    (void*&)Socket::close = (void*)::close;
-    (void*&)Socket::errno = (void*)Socket::errnoloop;
-    (void*&)Socket::getpeername = (void*)::getpeername;
-    (void*&)Socket::getsockname = (void*)::getsockname;
-    (void*&)Socket::getsockopt = (void*)::getsockopt;
-    (void*&)Socket::listen = (void*)::listen;
-    (void*&)Socket::recv = (void*)Socket::recvloop;
-    (void*&)Socket::recvfrom = (void*)::recvfrom;
-    (void*&)Socket::setsockopt = (void*)::setsockopt;
-    (void*&)Socket::send = (void*)Socket::sendloop;
-    (void*&)Socket::sendto = (void*)::sendto;
-    (void*&)Socket::shutdown = (void*)::shutdown;
-    (void*&)Socket::socket = (void*)::socket;
-    (void*&)Socket::strerror = (void*)Socket::strerrorloop;
+
+    Socket::accept = [](socket_t socket, struct sockaddr* addr, socklen_t* addrlen) { return ::accept(socket, addr, addrlen); };
+    Socket::bind = [](socket_t socket, const struct sockaddr* name, socklen_t namelen) { return ::bind(socket, name, namelen); };
+    Socket::connect = [](socket_t socket, const struct sockaddr* name, socklen_t namelen) { return ::connect(socket, name, namelen); };
+    Socket::close = [](socket_t socket) { return ::close(socket); };
+    Socket::errno = []() -> int& { return ::errno(); };
+    Socket::getpeername = [](socket_t socket, struct sockaddr* name, socklen_t* namelen) { return ::getpeername(socket, name, namelen); };
+    Socket::getsockname = [](socket_t socket, struct sockaddr* name, socklen_t* namelen) { return ::getsockname(socket, name, namelen); };
+    Socket::getsockopt = [](socket_t socket, int level, int optname, void* optval, socklen_t* optlen) { return ::getsockopt(socket, level, optname, optval, optlen); };
+    Socket::listen = [](socket_t socket, int backlog) { return ::listen(socket, backlog); };
+    Socket::recv = [](socket_t socket, void* buf, size_t len, int flags) { return ::recv(socket, buf, len, flags); };
+    Socket::recvfrom = [](socket_t socket, void* buf, size_t len, int flags, struct sockaddr* addr, socklen_t* addrlen) { return ::recvfrom(socket, buf, len, flags, addr, addrlen); };
+    Socket::setsockopt = [](socket_t socket, int level, int optname, const void* optval, socklen_t optlen) { return ::setsockopt(socket, level, optname, optval, optlen); };
+    Socket::send = [](socket_t socket, const void* buf, size_t len, int flags, char so_temp[Socket::CORK_SIZE]) { return ::send(socket, buf, len, flags); };
+    Socket::sendto = [](socket_t socket, const void* buf, size_t len, int flags, const struct sockaddr* name, socklen_t namelen) { return ::sendto(socket, buf, len, flags, name, namelen); };
+    Socket::shutdown = [](socket_t socket, int flags) { return ::shutdown(socket, flags); };
+    Socket::socket = [](int af, int type, int protocol) { return ::socket(af, type, protocol); };
+    Socket::strerror = [](int errnum) { return ::strerror(errnum); };
+
+    (void*&)Socket::accept = (void*)Socket::acceptInternal;
+    (void*&)Socket::errno = (void*)Socket::errnoInternal;
+    (void*&)Socket::recv = (void*)Socket::recvInternal;
+    (void*&)Socket::send = (void*)Socket::sendInternal;
+    (void*&)Socket::strerror = (void*)Socket::strerrorInternal;
 }
 //------------------------------------------------------------------------------
 #define errno errno()
 //------------------------------------------------------------------------------
-socket_t Socket::acceptloop(socket_t socket, struct sockaddr* addr, socklen_t* addrlen)
+socket_t Socket::acceptInternal(socket_t socket, struct sockaddr* addr, socklen_t* addrlen)
 {
     socket_t result = 0;
     for (;;)
@@ -85,7 +92,7 @@ socket_t Socket::acceptloop(socket_t socket, struct sockaddr* addr, socklen_t* a
     return result;
 }
 //------------------------------------------------------------------------------
-ssize_t Socket::recvloop(socket_t socket, void* buf, size_t len, int flags)
+ssize_t Socket::recvInternal(socket_t socket, void* buf, size_t len, int flags)
 {
     ssize_t result = 0;
     for (;;)
@@ -103,7 +110,7 @@ ssize_t Socket::recvloop(socket_t socket, void* buf, size_t len, int flags)
     return result;
 }
 //------------------------------------------------------------------------------
-ssize_t Socket::sendloop(socket_t socket, const void* buf, size_t len, int flags, char corkbuf[Socket::CORK_SIZE])
+ssize_t Socket::sendInternal(socket_t socket, const void* buf, size_t len, int flags, char corkbuf[Socket::CORK_SIZE])
 {
     struct CORK
     {
@@ -118,7 +125,7 @@ ssize_t Socket::sendloop(socket_t socket, const void* buf, size_t len, int flags
         {
             size_t length = cork.length;
             cork.length = 0;
-            ssize_t result = sendloop(socket, cork.buffer, length, flags & ~MSG_MORE, corkbuf);
+            ssize_t result = sendInternal(socket, cork.buffer, length, flags & ~MSG_MORE, corkbuf);
             if (result < 0)
                 return result;
         }
@@ -151,7 +158,7 @@ ssize_t Socket::sendloop(socket_t socket, const void* buf, size_t len, int flags
     return result;
 }
 //------------------------------------------------------------------------------
-int& Socket::errnoloop()
+int& Socket::errnoInternal()
 {
 #if defined(__APPLE__) || defined(__unix__)
     return ::errno;
@@ -162,7 +169,7 @@ int& Socket::errnoloop()
 #endif
 }
 //------------------------------------------------------------------------------
-char* Socket::strerrorloop(int errnum)
+char* Socket::strerrorInternal(int errnum)
 {
 #if defined(__APPLE__) || defined(__unix__)
     if (errnum == 0)
