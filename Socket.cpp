@@ -65,11 +65,11 @@ void Socket::startup()
     Socket::socket = [](int af, int type, int protocol) { return ::socket(af, type, protocol); };
     Socket::strerror = [](int errnum) { return ::strerror(errnum); };
 
-    (void*&)Socket::accept = (void*)Socket::acceptInternal;
-    (void*&)Socket::errno = (void*)Socket::errnoInternal;
-    (void*&)Socket::recv = (void*)Socket::recvInternal;
-    (void*&)Socket::send = (void*)Socket::sendInternal;
-    (void*&)Socket::strerror = (void*)Socket::strerrorInternal;
+    Socket::accept = Socket::acceptInternal;
+    Socket::errno = Socket::errnoInternal;
+    Socket::recv = Socket::recvInternal;
+    Socket::send = Socket::sendInternal;
+    Socket::strerror = Socket::strerrorInternal;
 }
 //------------------------------------------------------------------------------
 #define errno errno()
