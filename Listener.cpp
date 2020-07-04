@@ -142,7 +142,7 @@ bool Listener::Start(size_t count)
             continue;
         }
 
-        thiz.threadListen.emplace_back(std::stacking_thread(65536, [this, socket]{ thiz.ProcedureListen(socket); }));
+        thiz.threadListen.emplace_back(std::stacking_thread(8192, [this, socket]{ thiz.ProcedureListen(socket); }));
         if (thiz.threadListen.back().joinable() == false)
         {
             LISTEN_LOG(ERROR, "%s %s", "thread", ::strerror(errno));

@@ -54,7 +54,7 @@ void Log::DefaultFormat(int level, const char* format, ...)
     else if (level > DEBUG)
         level = DEBUG;
 
-    char replaceFormat[256];
+    char* replaceFormat = static_cast<char*>(::alloca(256));
     ::snprintf(replaceFormat, 256, "%s [%s] %s\n", timestamp, levelName[level - FATAL], format);
 
     va_list va;
