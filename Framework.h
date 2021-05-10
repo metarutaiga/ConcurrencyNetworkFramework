@@ -13,7 +13,7 @@ class FRAMEWORK_API Listener;
 class FRAMEWORK_API Framework : public Base
 {
 protected:
-    std::counting_semaphore eventSemaphore;
+    std::counting_semaphore<> eventSemaphore;
     std::vector<Event*> eventArray;
     std::mutex eventMutex;
 

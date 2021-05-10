@@ -21,8 +21,8 @@ protected:
     std::vector<Buffer> sendBufferUDP;
     std::mutex sendBufferMutexTCP;
     std::mutex sendBufferMutexUDP;
-    std::counting_semaphore sendBufferSemaphoreTCP;
-    std::counting_semaphore sendBufferSemaphoreUDP;
+    std::counting_semaphore<> sendBufferSemaphoreTCP;
+    std::counting_semaphore<> sendBufferSemaphoreUDP;
 
     char* sourceAddress;
     char* sourcePort;
